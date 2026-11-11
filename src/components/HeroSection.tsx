@@ -1,6 +1,6 @@
 import React from 'react';
-import { STORE_INFO, GUARANTEES } from '../data/catVillaData';
-import { Hammer, ShieldCheck, Sparkles, Truck, ArrowRight, MessageCircle, Calculator, MapPin, Eye } from 'lucide-react';
+import { STORE_INFO } from '../data/catVillaData';
+import { Sparkles, Truck, MessageCircle, Calculator, MapPin, Eye, Hammer, ShieldCheck } from 'lucide-react';
 
 interface HeroSectionProps {
   onOpenEstimator: () => void;
@@ -13,21 +13,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   onViewMenuImages,
   onOpenImageZoom
 }) => {
-  const getIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'Hammer':
-        return <Hammer className="w-5 h-5 text-amber-800" />;
-      case 'ShieldCheck':
-        return <ShieldCheck className="w-5 h-5 text-amber-800" />;
-      case 'Sparkles':
-        return <Sparkles className="w-5 h-5 text-amber-800" />;
-      case 'Truck':
-        return <Truck className="w-5 h-5 text-amber-800" />;
-      default:
-        return <Sparkles className="w-5 h-5 text-amber-800" />;
-    }
-  };
-
   const handleZoomStorefront = () => {
     if (onOpenImageZoom) {
       onOpenImageZoom(
@@ -43,35 +28,34 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       onOpenImageZoom(
         '花花招財貓 · 官方 LINE QR Code',
         STORE_INFO.lineQrCode,
-        '掃描加入店長 LINE (ID: 0966129569) 諮詢尺寸與客製報價'
+        `掃描加入店長 LINE (ID: ${STORE_INFO.lineId}) 諮詢尺寸與客製報價`
       );
     }
   };
 
   return (
-    <section className="relative overflow-hidden pt-8 pb-16 lg:pt-14 lg:pb-22 border-b border-stone-200">
+    <section className="relative overflow-hidden pt-6 pb-16 lg:pt-14 lg:pb-22 border-b border-stone-200">
       {/* Subtle Warm Background Accent */}
       <div className="absolute top-0 right-1/4 w-96 h-96 bg-amber-100/40 rounded-full blur-3xl pointer-events-none -z-10" />
       <div className="absolute bottom-0 left-10 w-80 h-80 bg-stone-200/40 rounded-full blur-3xl pointer-events-none -z-10" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           {/* Left Column: Headlines & Brand Proposition */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="inline-flex items-center gap-2 text-xs font-semibold text-amber-900 bg-amber-500/10 border border-amber-600/20 px-3 py-1.5 rounded-full">
+          <div className="order-2 lg:order-1 lg:col-span-7 space-y-6">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold text-amber-900 bg-amber-500/10 border border-amber-600/20 px-3.5 py-1.5 rounded-2xl w-fit">
               <span>天然松木無甲醛</span>
               <span aria-hidden="true">·</span>
               <span>純實木板厚度足 1.5cm</span>
               <span aria-hidden="true">·</span>
-              <span>高透安全亞克力</span>
+              <span>高透安全壓克力</span>
               <span aria-hidden="true">·</span>
               <span>新竹物流免運直送</span>
             </div>
 
-            <h1 className="font-serif-title text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-900 tracking-tight leading-[1.25] text-balance">
-              給愛貓一個溫暖、健康、
-              <br />
-              <span className="text-amber-900">量身定制的實木夢想城堡</span>
+            <h1 className="font-serif-title text-sm min-[360px]:text-base min-[400px]:text-lg sm:text-2xl md:text-3xl lg:text-4xl font-bold text-stone-900 tracking-tight leading-snug sm:leading-[1.35]">
+              <span className="block whitespace-nowrap">捨棄華麗包裝，只留頂級好木頭，</span>
+              <span className="block text-amber-900 mt-1 sm:mt-1.5 whitespace-nowrap">為貓貓築起最安心的專屬城堡</span>
             </h1>
 
             {/* Structured Founder Mission & Quality Promise */}
@@ -81,36 +65,50 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 <span>店長初心：不想貓咪住到爛木頭！</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs sm:text-[13px] text-stone-700">
-                <div className="bg-white/85 p-3 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-800 mt-1.5 shrink-0" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-[13px] text-stone-700">
+                <div className="bg-white/85 p-3.5 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
+                  <span className="text-base shrink-0 leading-none mt-0.5">🪵</span>
                   <div>
-                    <strong className="text-stone-900 block font-semibold">天然松木無甲醛 · 足 1.5cm</strong>
-                    <span className="text-stone-600 text-xs">堅持純實木厚度 1.5cm，表面微防水漆防潮，搭配高透耐磨安全亞克力門片。</span>
+                    <strong className="text-stone-900 block font-semibold">天然松木無甲醛・板材厚度 1.5cm</strong>
+                    <span className="text-stone-600 text-xs leading-relaxed block mt-1">
+                      堅持使用厚實天然實木，表面微防水防潮；
+                      <br className="hidden sm:inline" />
+                      搭配高透耐磨的安全壓克力門片，打造穩固無毒的健康空間。
+                    </span>
                   </div>
                 </div>
 
-                <div className="bg-white/85 p-3 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-800 mt-1.5 shrink-0" />
+                <div className="bg-white/85 p-3.5 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
+                  <span className="text-base shrink-0 leading-none mt-0.5">🔩</span>
                   <div>
-                    <strong className="text-stone-900 block font-semibold">出貨前預組裝拍照確認</strong>
-                    <span className="text-stone-600 text-xs">工廠在大陸專注高品質客製生產，出貨前預組裝拍照確認無誤後妥善打包。</span>
+                    <strong className="text-stone-900 block font-semibold">精準孔位設計・訂製款實拍確認</strong>
+                    <span className="text-stone-600 text-xs leading-relaxed block mt-1">
+                      為確保運送安全，產品皆預留精準孔位方便您輕鬆組裝。
+                      <br className="hidden sm:inline" />
+                      凡屬「特別訂製款式」，將額外提供出貨前組裝實拍的確認服務。
+                    </span>
                   </div>
                 </div>
 
-                <div className="bg-white/85 p-3 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-800 mt-1.5 shrink-0" />
+                <div className="bg-white/85 p-3.5 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
+                  <span className="text-base shrink-0 leading-none mt-0.5">🚚</span>
                   <div>
-                    <strong className="text-stone-900 block font-semibold">直送台灣享【免運費】</strong>
-                    <span className="text-stone-600 text-xs">新竹物流配送至一樓（偏遠地區與離島除外），安全加固直達您府上。</span>
+                    <strong className="text-stone-900 block font-semibold">直送台灣享免運・安全加固到府</strong>
+                    <span className="text-stone-600 text-xs leading-relaxed block mt-1">
+                      由新竹物流安全加固配送，（偏遠與離島地區除外），為您省去搬運與運費煩惱。
+                    </span>
                   </div>
                 </div>
 
-                <div className="bg-white/85 p-3 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-800 mt-1.5 shrink-0" />
+                <div className="bg-white/85 p-3.5 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
+                  <span className="text-base shrink-0 leading-none mt-0.5">🛡️</span>
                   <div>
-                    <strong className="text-stone-900 block font-semibold">享 1 年保固 · 店長教學影片</strong>
-                    <span className="text-stone-600 text-xs">享 1 年品質保固，並提供店長本人親自入鏡示範拍攝的組裝教學影片。</span>
+                    <strong className="text-stone-900 block font-semibold">享 1 年品質保固・店長教學影片</strong>
+                    <span className="text-stone-600 text-xs leading-relaxed block mt-1">
+                      提供完整 1 年售後保固，並隨附店長親身示範的組裝教學影片。
+                      <br className="hidden sm:inline" />
+                      售後服務不中斷，讓您組裝輕鬆不卡關。
+                    </span>
                   </div>
                 </div>
               </div>
@@ -173,8 +171,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             </div>
           </div>
 
-          {/* Right Column: Authentic Storefront Photo Showcase */}
-          <div className="lg:col-span-5">
+          {/* Storefront Photo Showcase */}
+          <div className="order-1 lg:order-2 lg:col-span-5">
             <div className="relative bg-white rounded-2xl border border-stone-200 p-4 sm:p-5 shadow-md hover:shadow-lg transition-shadow">
               {/* Card Header info */}
               <div className="flex items-center justify-between pb-3.5 border-b border-stone-100">
@@ -209,10 +207,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
                 />
 
-                {/* Gradient vignette */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
 
-                {/* Overlaid Badges on Image */}
                 <div className="absolute top-3 left-3 bg-stone-900/80 backdrop-blur-xs text-white text-[11px] font-semibold px-2.5 py-1 rounded-md border border-white/20">
                   實體門店現場實景 · 台中豐原
                 </div>
@@ -282,37 +278,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* 4 Great Guarantees Bar (4 大保證) */}
-        <div className="mt-14 pt-10 border-t border-stone-200">
-          <div className="text-center max-w-xl mx-auto mb-8">
-            <h2 className="font-serif-title text-xl sm:text-2xl font-bold text-stone-900">
-              花花招財貓 · 4 大堅持保證
-            </h2>
-            <p className="text-xs sm:text-sm text-stone-500 mt-1">
-              為愛貓打造安全舒適的永久住所，每個細節都經得起考驗
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {GUARANTEES.map((item) => (
-              <div
-                key={item.id}
-                className="bg-white rounded-xl p-5 border border-stone-200/80 hover:border-amber-800/40 hover:shadow-xs transition-all space-y-2.5"
-              >
-                <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
-                  {getIcon(item.icon)}
-                </div>
-                <h3 className="font-serif-title font-bold text-stone-900 text-base">
-                  {item.title}
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {item.description}
-                </p>
-              </div>
-            ))}
           </div>
         </div>
       </div>

@@ -80,9 +80,9 @@ export const STORE_INFO = {
   phoneDisplay: '0966-129-569',
   lineId: '0966129569',
   lineUrl: 'https://line.me/ti/p/~0966129569',
-  lineQrCode: '/public/assets/aistudio/0de9e862303e70fdda9f035697e8148_6fe2aca5.jpg',
-  storefrontImage: '/public/assets/aistudio/e269d794a175cea7aa119b02589895a_32dbfebe.jpg',
-  travelFeeSheetImage: '/public/assets/aistudio/image_1f5360da.png',
+  lineQrCode: '/assets/aistudio/0de9e862303e70fdda9f035697e8148_6fe2aca5.jpg',
+  storefrontImage: '/assets/aistudio/e269d794a175cea7aa119b02589895a_32dbfebe.jpg',
+  travelFeeSheetImage: '/assets/aistudio/image_1f5360da.png',
   googleMapsUrl: 'https://maps.google.com/?q=' + encodeURIComponent('臺中市豐原區圓環西路97號 花花招財貓'),
   facebookName: '花花招財貓｜客製化實木貓別墅/貓櫃/貓籠',
   facebookUrl: 'https://www.facebook.com/search/top?q=' + encodeURIComponent('花花招財貓'),
@@ -306,7 +306,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 90, depth: 60, length: 60, dimensionCode: '90-60-60' },
     price: 5500,
     installFee: 2000,
-    image: '/public/assets/aistudio/90-60-60_f18b59e3.jpg',
+    image: '/assets/aistudio/90-60-60_f18b59e3.jpg',
     styleVariant: '標準款',
     includedAccessories: ['安全造型柵欄', '透氣格柵孔', '靜音煞車萬向輪'],
     recommendedCats: '1 隻成貓 / 幼貓小獨立套房',
@@ -324,7 +324,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 90, depth: 60, length: 90, dimensionCode: '90-60-90' },
     price: 7500,
     installFee: 2500,
-    image: '/public/assets/aistudio/90-60-90_c0bac971.jpg',
+    image: '/assets/aistudio/90-60-90_c0bac971.jpg',
     styleVariant: '階梯版',
     includedAccessories: ['雙開亞克力門', '實木緩坡階梯', '二樓圍欄平台', '靜音煞車萬向輪'],
     recommendedCats: '1 - 2 隻貓咪',
@@ -342,7 +342,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 90, depth: 60, length: 90, dimensionCode: '90-60-90' },
     price: 7500,
     installFee: 2500,
-    image: '/public/assets/aistudio/B90-60-90_dc78aa1a.jpg',
+    image: '/assets/aistudio/B90-60-90_dc78aa1a.jpg',
     styleVariant: '抓柱版',
     includedAccessories: ['雙開亞克力門', '天然劍麻磨爪柱', '貓頭休息房', '安全造型柵欄'],
     recommendedCats: '1 - 2 隻貓咪',
@@ -362,7 +362,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 120, depth: 60, length: 60, dimensionCode: '120-60-60' },
     price: 6500,
     installFee: 2500,
-    image: '/public/assets/aistudio/120-60-60_587a0b85.jpg',
+    image: '/assets/aistudio/120-60-60_587a0b85.jpg',
     styleVariant: '標準款',
     includedAccessories: ['單開大片亞克力門', '二樓圍欄平台', '貓頭休息房', '底部萬向輪'],
     recommendedCats: '1 - 2 隻貓咪',
@@ -380,7 +380,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 120, depth: 60, length: 90, dimensionCode: '120-60-90' },
     price: 8500,
     installFee: 3000,
-    image: '/public/assets/aistudio/120-60-90_d44f97fc.jpg',
+    image: '/assets/aistudio/120-60-90_d44f97fc.jpg',
     styleVariant: '階梯版',
     includedAccessories: ['全景雙開亞克力門', '實木緩坡階梯', '貓頭休息房', '底部萬向輪'],
     recommendedCats: '2 隻成貓',
@@ -398,7 +398,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 120, depth: 60, length: 90, dimensionCode: '120-60-90' },
     price: 8500,
     installFee: 3000,
-    image: '/public/assets/aistudio/B120-60-90_c49b37e1.jpg',
+    image: '/assets/aistudio/B120-60-90_c49b37e1.jpg',
     styleVariant: '雙開門版',
     includedAccessories: ['雙開透明亞克力門', '貓頭休息房', '獨立如廁貓砂盆空間', '靜音煞車萬向輪'],
     recommendedCats: '2 隻成貓',
@@ -416,7 +416,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 120, depth: 60, length: 120, dimensionCode: '120-60-120' },
     price: 10800,
     installFee: 3500,
-    image: '/public/assets/aistudio/120-60-120_132a6421.jpg',
+    image: '/assets/aistudio/120-60-120_132a6421.jpg',
     styleVariant: '大面寬版',
     includedAccessories: ['大面寬雙開門', '可容納大砂盆+雙食盆', '靈動實木跳台', '貓頭休息房'],
     recommendedCats: '2 - 3 隻貓咪',
@@ -434,7 +434,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 120, depth: 60, length: 120, dimensionCode: '120-60-120' },
     price: 10800,
     installFee: 3500,
-    image: '/public/assets/aistudio/B120-60-120_0e734dd8.jpg',
+    image: '/assets/aistudio/B120-60-120_0e734dd8.jpg',
     styleVariant: '雙休息房版',
     includedAccessories: ['頂層對稱雙貓頭休息房', '大通透亞克力門', '中央雙開門大通道', '靜音煞車輪'],
     recommendedCats: '2 - 3 隻貓咪',
@@ -454,7 +454,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 150, depth: 60, length: 60, dimensionCode: '150-60-60' },
     price: 9800,
     installFee: 3500,
-    image: '/public/assets/aistudio/150-60-60_bc590492.jpg',
+    image: '/assets/aistudio/150-60-60_bc590492.jpg',
     styleVariant: '標準款',
     includedAccessories: ['三層實木躍升平台', '高挑亞克力門', '頂層造型護欄', '劍麻抓柱'],
     recommendedCats: '1 - 2 隻貓咪',
@@ -472,7 +472,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 150, depth: 60, length: 90, dimensionCode: '150-60-90' },
     price: 11500,
     installFee: 4000,
-    image: '/public/assets/aistudio/150-60-90_4f890318.jpg',
+    image: '/assets/aistudio/150-60-90_4f890318.jpg',
     styleVariant: '標準挑高版',
     includedAccessories: ['貓頭休息房', '大開口雙開亞克力門', '實木活動跳台', '底部大容量貓砂盆位'],
     recommendedCats: '2 - 3 隻貓咪',
@@ -490,7 +490,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 150, depth: 60, length: 90, dimensionCode: '150-60-90' },
     price: 11500,
     installFee: 4000,
-    image: '/public/assets/aistudio/B150-60-90_7092476a.jpg',
+    image: '/assets/aistudio/B150-60-90_7092476a.jpg',
     styleVariant: '柵欄休憩版',
     includedAccessories: ['安全造型柵欄*1', '貓頭休息房', '實木躍升平台', '大面寬雙開門'],
     recommendedCats: '2 - 3 隻貓咪',
@@ -508,7 +508,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 150, depth: 60, length: 120, dimensionCode: '150-60-120' },
     price: 13800,
     installFee: 4500,
-    image: '/public/assets/aistudio/150-60-120_ff9034d7.jpg',
+    image: '/assets/aistudio/150-60-120_ff9034d7.jpg',
     styleVariant: '階梯抓柱版',
     includedAccessories: ['附厚實通天柱*1', '安全造型柵欄*1', '寬幅斜梯', '四層活動動線'],
     recommendedCats: '2 - 4 隻貓咪',
@@ -526,7 +526,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 150, depth: 60, length: 120, dimensionCode: '150-60-120' },
     price: 13800,
     installFee: 4500,
-    image: '/public/assets/aistudio/B150-60-120_5aeb586e.jpg',
+    image: '/assets/aistudio/B150-60-120_5aeb586e.jpg',
     styleVariant: '雙休息房吊橋版',
     includedAccessories: ['附通天柱*1', '安全造型柵欄*1', '高空浪漫吊橋', '雙貓頭休息房'],
     recommendedCats: '2 - 4 隻貓咪',
@@ -544,7 +544,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 150, depth: 60, length: 150, dimensionCode: '150-60-150' },
     price: 19800,
     installFee: 6000,
-    image: '/public/assets/aistudio/150-60-150_c0c982c9.jpg',
+    image: '/assets/aistudio/150-60-150_c0c982c9.jpg',
     styleVariant: '三門大開口版',
     includedAccessories: ['附通天柱*1', '附安全造型柵欄*1', '三扇獨立亞克力門', '多層貓頭休息房'],
     recommendedCats: '3 - 5 隻貓咪',
@@ -562,7 +562,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 150, depth: 60, length: 150, dimensionCode: '150-60-150' },
     price: 19800,
     installFee: 6000,
-    image: '/public/assets/aistudio/B150-60-150_8a26d08b.jpg',
+    image: '/assets/aistudio/B150-60-150_8a26d08b.jpg',
     styleVariant: '三門全能吊橋版',
     includedAccessories: ['附通天柱*1', '附安全造型柵欄*1', '空中吊橋', '三扇獨立亞克力門'],
     recommendedCats: '3 - 5 隻貓咪',
@@ -582,7 +582,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 180, depth: 60, length: 120, dimensionCode: '180-60-120' },
     price: 15800,
     installFee: 6000,
-    image: '/public/assets/aistudio/180-60-120_d83cbc2e.jpg',
+    image: '/assets/aistudio/180-60-120_d83cbc2e.jpg',
     styleVariant: '上下四門獨立版',
     includedAccessories: ['附通天柱*1', '附安全造型柵欄*1', '上下四組獨立開門', '雙貓頭休息房'],
     recommendedCats: '3 - 5 隻貓咪',
@@ -600,7 +600,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 180, depth: 60, length: 120, dimensionCode: '180-60-120' },
     price: 15800,
     installFee: 6000,
-    image: '/public/assets/aistudio/B180-60-120_c81f8495.jpg',
+    image: '/assets/aistudio/B180-60-120_c81f8495.jpg',
     styleVariant: '上下四門款',
     includedAccessories: ['附通天柱*1', '附安全造型柵欄*1', '上下四組獨立開門', '通透亞克力門片'],
     recommendedCats: '3 - 5 隻貓咪',
@@ -618,7 +618,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     dimensions: { height: 180, depth: 60, length: 120, dimensionCode: '180-60-120' },
     price: 15800,
     installFee: 6000,
-    image: '/public/assets/aistudio/C180-60-120_080ab68b.jpg',
+    image: '/assets/aistudio/C180-60-120_080ab68b.jpg',
     styleVariant: '吊橋四門全配版',
     includedAccessories: ['附通天柱*1', '附安全造型柵欄*1', '高空弧形空中吊橋', '上下四組獨立開門'],
     recommendedCats: '3 - 5 隻貓咪',
@@ -720,7 +720,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
   {
     length: 60,
     title: '長度 60cm 系列 (深度固定 60cm)',
-    originalImage: '/public/assets/aistudio/60__1__aa55f053.png',
+    originalImage: '/assets/aistudio/60__1__aa55f053.png',
     items: [
       { dimensionCode: '90-60-60', height: 90, depth: 60, length: 60, price: 5500, installFee: 2000 },
       { dimensionCode: '120-60-60', height: 120, depth: 60, length: 60, price: 6500, installFee: 2500 },
@@ -731,7 +731,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
   {
     length: 90,
     title: '長度 90cm 系列 (深度固定 60cm)',
-    originalImage: '/public/assets/aistudio/90_16a75416.png',
+    originalImage: '/assets/aistudio/90_16a75416.png',
     items: [
       { dimensionCode: '90-60-90', height: 90, depth: 60, length: 90, price: 7500, installFee: 2500 },
       { dimensionCode: '120-60-90', height: 120, depth: 60, length: 90, price: 8500, installFee: 3000 },
@@ -742,7 +742,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
   {
     length: 120,
     title: '長度 120cm 系列 (深度固定 60cm)',
-    originalImage: '/public/assets/aistudio/120_8c63ebac.png',
+    originalImage: '/assets/aistudio/120_8c63ebac.png',
     items: [
       { dimensionCode: '90-60-120', height: 90, depth: 60, length: 120, price: 8800, installFee: 3000 },
       { dimensionCode: '120-60-120', height: 120, depth: 60, length: 120, price: 10800, installFee: 3500 },
@@ -753,7 +753,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
   {
     length: 150,
     title: '長度 150cm 系列 (深度固定 60cm)',
-    originalImage: '/public/assets/aistudio/150_4c3aaf2d.png',
+    originalImage: '/assets/aistudio/150_4c3aaf2d.png',
     items: [
       { dimensionCode: '90-60-150', height: 90, depth: 60, length: 150, price: 12500, installFee: 4000 },
       { dimensionCode: '120-60-150', height: 120, depth: 60, length: 150, price: 14500, installFee: 5000 },
@@ -764,7 +764,7 @@ export const MENU_CATEGORIES: MenuCategory[] = [
   {
     length: 180,
     title: '長度 180cm 系列 (深度固定 60cm)',
-    originalImage: '/public/assets/aistudio/180_0b3dabb4.png',
+    originalImage: '/assets/aistudio/180_0b3dabb4.png',
     items: [
       { dimensionCode: '90-60-180', height: 90, depth: 60, length: 180, price: 14500, installFee: 4500 },
       { dimensionCode: '120-60-180', height: 120, depth: 60, length: 180, price: 16500, installFee: 5500 },
@@ -825,7 +825,7 @@ export const HUA_HUA_STORY = {
       title: '剛出生第一天：三隻小奶貓來到世界',
       ageStage: '剛出生 (Day 1)',
       dateStr: '2021年06月23日',
-      imageUrl: '/public/assets/aistudio/ba55b85fe7f8bf86c3e22ee5586c4a0_5165cb01.jpg',
+      imageUrl: '/assets/aistudio/ba55b85fe7f8bf86c3e22ee5586c4a0_5165cb01.jpg',
       storyCaption: '在紙箱母貓懷裡親自接生剪臍帶，花花是最後一隻最小的早產貓。'
     },
     {
@@ -833,7 +833,7 @@ export const HUA_HUA_STORY = {
       title: '尚未睜眼：手心裡最脆弱的掌上明珠',
       ageStage: '初生 7 天',
       dateStr: '2021年06月30日',
-      imageUrl: '/public/assets/aistudio/cad1cc7369e9da394b64d0718d302ef_5ea56e51.jpg',
+      imageUrl: '/assets/aistudio/cad1cc7369e9da394b64d0718d302ef_5ea56e51.jpg',
       storyCaption: '還沒睜眼的小花花只有手掌心大，搶不到母乳，全靠店長針筒人工滴餵。'
     },
     {
@@ -841,7 +841,7 @@ export const HUA_HUA_STORY = {
       title: '產房帳篷裡手足情深',
       ageStage: '滿月期 (1個月)',
       dateStr: '2021年07月23日',
-      imageUrl: '/public/assets/aistudio/be9a0b270154e2bc35560c6f32a3965_6fea4b7b.jpg',
+      imageUrl: '/assets/aistudio/be9a0b270154e2bc35560c6f32a3965_6fea4b7b.jpg',
       storyCaption: '貓媽媽帶著3隻小貓在產房小帳篷裡，花花終於慢慢長出肉肉，眼睛亮晶晶。'
     },
     {
@@ -849,7 +849,7 @@ export const HUA_HUA_STORY = {
       title: '小花坐墊上的大眼睛好奇寶寶',
       ageStage: '幼貓期 (2個月)',
       dateStr: '2021年08月20日',
-      imageUrl: '/public/assets/aistudio/61a1a04d810a1a720473174863215fe_38d007ba.jpg',
+      imageUrl: '/assets/aistudio/61a1a04d810a1a720473174863215fe_38d007ba.jpg',
       storyCaption: '開始學會到處探索，圓滾滾的金黃色大眼睛直盯著鏡頭，萌度爆表。'
     },
     {
@@ -857,7 +857,7 @@ export const HUA_HUA_STORY = {
       title: '格子毯上的甜甜睡顏',
       ageStage: '幼貓期 (3個月)',
       dateStr: '2021年09月18日',
-      imageUrl: '/public/assets/aistudio/06b505430149d27b798d0e645cf4f1c_2c2c5241.jpg',
+      imageUrl: '/assets/aistudio/06b505430149d27b798d0e645cf4f1c_2c2c5241.jpg',
       storyCaption: '在保暖格子毛毯上蜷成一個小毛球，平安健康度過幼貓脆弱期。'
     },
     {
@@ -865,7 +865,7 @@ export const HUA_HUA_STORY = {
       title: '抱著紅草莓毛球甜甜午睡',
       ageStage: '少年期 (5個月)',
       dateStr: '2021年11月10日',
-      imageUrl: '/public/assets/aistudio/5065c21317f631942d47d8780b8c41c_d8d8443d.jpg',
+      imageUrl: '/assets/aistudio/5065c21317f631942d47d8780b8c41c_d8d8443d.jpg',
       storyCaption: '抱著自己最喜歡的草莓玩具進入夢鄉，像小天使一樣無憂無慮。'
     },
     {
@@ -873,7 +873,7 @@ export const HUA_HUA_STORY = {
       title: '剛睡醒打了一個大哈欠',
       ageStage: '少年期 (6個月)',
       dateStr: '2021年12月',
-      imageUrl: '/public/assets/aistudio/8fdb297a6c7229bdd19a04f83e4243b_0047682f.jpg',
+      imageUrl: '/assets/aistudio/8fdb297a6c7229bdd19a04f83e4243b_0047682f.jpg',
       storyCaption: '打個大哈欠 滿滿幸福安全感'
     },
     {
@@ -881,7 +881,7 @@ export const HUA_HUA_STORY = {
       title: '冷冷冬日鑽進暖被窩',
       ageStage: '少年期 (7個月)',
       dateStr: '2022年01月15日',
-      imageUrl: '/public/assets/aistudio/8c6fd1e2cd5cbff2dc088a7693402e9_cf0dad8a.jpg',
+      imageUrl: '/assets/aistudio/8c6fd1e2cd5cbff2dc088a7693402e9_cf0dad8a.jpg',
       storyCaption: '冬天最愛窩在棉被堆裡露出小腦袋，享受滿滿的安全感。'
     },
     {
@@ -889,7 +889,7 @@ export const HUA_HUA_STORY = {
       title: '一歲生日！威嚴大氣的英短藍貓',
       ageStage: '成貓 (1歲)',
       dateStr: '2022年06月23日',
-      imageUrl: '/public/assets/aistudio/24064c63cc8649a6de0529e00916c2e_de1b5add.jpg',
+      imageUrl: '/assets/aistudio/24064c63cc8649a6de0529e00916c2e_de1b5add.jpg',
       storyCaption: '滿一歲啦！毛色濃密發亮、腮幫子圓潤，威嚴端坐高處巡視領地。'
     },
     {
@@ -897,7 +897,7 @@ export const HUA_HUA_STORY = {
       title: '在電腦鍵盤旁認真監工當店長',
       ageStage: '門店店長日常',
       dateStr: '2022年10月05日',
-      imageUrl: '/public/assets/aistudio/daf9688831ba1d48d63e15fd84e5361_091c081c.jpg',
+      imageUrl: '/assets/aistudio/daf9688831ba1d48d63e15fd84e5361_091c081c.jpg',
       storyCaption: '店長在畫貓別墅客製圖，花花就在旁邊「監工」催促出貨，超盡責！'
     },
     {
@@ -905,7 +905,7 @@ export const HUA_HUA_STORY = {
       title: '平安絕育：戴著向日葵頭套康復中',
       ageStage: '成貓健康守護',
       dateStr: '2023年04月12日',
-      imageUrl: '/public/assets/aistudio/04d6d7d0a8ef1a8754c5994f8c04569_5b59f3a8.jpg',
+      imageUrl: '/assets/aistudio/04d6d7d0a8ef1a8754c5994f8c04569_5b59f3a8.jpg',
       storyCaption: '母貓已順利完成絕育手術！戴著可愛的向日葵防舔圈，很快就恢復元氣。'
     },
     {
@@ -913,7 +913,7 @@ export const HUA_HUA_STORY = {
       title: '最愛賴在店長胸口撒嬌',
       ageStage: '幸福定格 (現今)',
       dateStr: '2024年至今',
-      imageUrl: '/public/assets/aistudio/e795868b7b6b2da3b8ff5370acbe330_f8388ab8.jpg',
+      imageUrl: '/assets/aistudio/e795868b7b6b2da3b8ff5370acbe330_f8388ab8.jpg',
       storyCaption: '從小手把手喂大，即使長大成大貓咪，最愛的依然是賴在店長胸口撒嬌呼嚕，這是最貼切的幸福定格。'
     }
   ]
@@ -925,7 +925,7 @@ export const INITIAL_SHOWCASE_PHOTOS: ShowcasePhoto[] = [
     title: '150-60-120 全景雙開門旗艦款 實品拍',
     sizeCategory: '120',
     dimensionsText: '高150 x 深60 x 長120 cm',
-    imageUrl: '/public/assets/aistudio/150-60-120_ff9034d7.jpg',
+    imageUrl: '/assets/aistudio/150-60-120_ff9034d7.jpg',
     customerNote: '客製天然松木無甲醛，純實木板厚度足 1.5cm，表面微防水漆，透光耐磨亞克力雙開門，標配通天抓柱與實木柵欄。',
     date: '2026年 完工實拍',
     tags: ['通天柱', '實木柵欄', '天然松木', '亞克力門']
@@ -935,7 +935,7 @@ export const INITIAL_SHOWCASE_PHOTOS: ShowcasePhoto[] = [
     title: '180-60-120 頂天立地豪邸（上下四門獨立款）',
     sizeCategory: '120',
     dimensionsText: '高180 x 深60 x 長120 cm',
-    imageUrl: '/public/assets/aistudio/180-60-120_d83cbc2e.jpg',
+    imageUrl: '/assets/aistudio/180-60-120_d83cbc2e.jpg',
     customerNote: '1.8米直通天花板，下層獨立隱蔽貓砂盆空間，上層雙貓頭休息房，大陸工廠直寄全台免運費（偏遠與離島除外）！',
     date: '2026年 完工實拍',
     tags: ['四門獨立', '1.8米頂天', '雙休息房', '免運到府']
@@ -945,7 +945,7 @@ export const INITIAL_SHOWCASE_PHOTOS: ShowcasePhoto[] = [
     title: '150-60-150 三門豪華城堡（附通天柱+安全造型柵欄）',
     sizeCategory: '150',
     dimensionsText: '高150 x 深60 x 長150 cm',
-    imageUrl: '/public/assets/aistudio/150-60-150_c0c982c9.jpg',
+    imageUrl: '/assets/aistudio/150-60-150_c0c982c9.jpg',
     customerNote: '1.5米長超大城堡，三門大開口透氣佳，出貨前進行預組裝拍照確認無誤後妥善打包。',
     date: '2026年 完工實拍',
     tags: ['三門城堡', '通天柱', '安全造型柵欄', '預組裝拍照']
@@ -955,7 +955,7 @@ export const INITIAL_SHOWCASE_PHOTOS: ShowcasePhoto[] = [
     title: '120-60-90 雙門經典款（附劍麻抓柱與跳台）',
     sizeCategory: '90',
     dimensionsText: '高120 x 深60 x 長90 cm',
-    imageUrl: '/public/assets/aistudio/B120-60-90_c49b37e1.jpg',
+    imageUrl: '/assets/aistudio/B120-60-90_c49b37e1.jpg',
     customerNote: '客廳電視牆黃金尺寸，天然松木無甲醛，純實木厚度 1.5cm，高透亞克力門讓貓咪曬太陽超愜意。',
     date: '2026年 完工實拍',
     tags: ['雙門', '劍麻柱', '90cm黃金面寬']
@@ -965,7 +965,7 @@ export const INITIAL_SHOWCASE_PHOTOS: ShowcasePhoto[] = [
     title: '90-60-60 輕巧小宅別墅 臥室床頭實拍照',
     sizeCategory: '60',
     dimensionsText: '高90 x 深60 x 長60 cm',
-    imageUrl: '/public/assets/aistudio/90-60-60_f18b59e3.jpg',
+    imageUrl: '/assets/aistudio/90-60-60_f18b59e3.jpg',
     customerNote: '小資單貓獨立套房，帶萬向輪好移動打掃，底層可容納大號貓砂盆，全台免運費（偏遠與離島除外）。',
     date: '2026年 完工實拍',
     tags: ['單貓套房', '萬向煞車輪', '小宅首選']

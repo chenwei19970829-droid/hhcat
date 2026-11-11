@@ -116,7 +116,7 @@ export const GUARANTEES = [
   {
     id: 'g3',
     title: '高透耐磨安全亞克力',
-    description: '高清透亮、防撞耐刮輕盈安全，360°隨時欣賞愛貓萌態。',
+    description: '高清透亮、防撞耐刮輕盈安全，隨時欣賞愛貓萌態。',
     icon: 'Sparkles'
   },
   {
@@ -803,7 +803,7 @@ export interface HuaHuaPhoto {
 }
 
 export const HUA_HUA_STORY = {
-  catName: '花花 (Hua Hua)',
+catName: '花花（HuaHua）',
   storeName: '花花招財貓',
   birthday: '2021年6月23日',
   gender: '母貓（已絕育）',

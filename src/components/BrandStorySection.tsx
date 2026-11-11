@@ -279,14 +279,14 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
                   onOpenImageZoom &&
                   onOpenImageZoom(
                     '花花（榮譽店長）實拍',
-                    '/public/assets/aistudio/8fdb297a6c7229bdd19a04f83e4243b_0047682f.jpg',
+                    '/assets/aistudio/8fdb297a6c7229bdd19a04f83e4243b_0047682f.jpg',
                     '2021年6月23日出生，英短藍貓（母貓已絕育）。打個大哈欠，滿滿幸福安全感！'
                   )
                 }
                 title="點擊放大查看花花"
               >
                 <img
-                  src="/public/assets/aistudio/8fdb297a6c7229bdd19a04f83e4243b_0047682f.jpg"
+                  src="/assets/aistudio/8fdb297a6c7229bdd19a04f83e4243b_0047682f.jpg"
                   alt="花花在實木貓別墅打哈欠"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />

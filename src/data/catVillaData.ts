@@ -50,7 +50,7 @@ export interface AccessoryOption {
 export interface ShowcasePhoto {
   id: string;
   title: string;
-  sizeCategory: '60' | '90' | '120' | '150' | '180';
+  sizeCategory: '60' | '90' | '120' | '150' | '180' | 'custom';
   dimensionsText: string;
   imageUrl: string;
   customerNote: string;
@@ -78,8 +78,8 @@ export const STORE_INFO = {
   address: '臺中市豐原區圓環西路97號',
   phone: '0966129569',
   phoneDisplay: '0966-129-569',
-  lineId: '0966129569',
-  lineUrl: 'https://line.me/ti/p/~0966129569',
+  lineId: 'hhcat.cc',
+  lineUrl: 'https://line.me/ti/p/~hhcat.cc',
   lineQrCode: '/assets/aistudio/0de9e862303e70fdda9f035697e8148_6fe2aca5.jpg',
   storefrontImage: '/assets/aistudio/e269d794a175cea7aa119b02589895a_32dbfebe.jpg',
   travelFeeSheetImage: '/assets/aistudio/image_1f5360da.png',
@@ -115,7 +115,7 @@ export const GUARANTEES = [
   },
   {
     id: 'g3',
-    title: '高透耐磨安全亞克力',
+    title: '高透耐磨安全壓克力',
     description: '高清透亮、防撞耐刮輕盈安全，隨時欣賞愛貓萌態。',
     icon: 'Sparkles'
   },
@@ -273,13 +273,13 @@ export const DISCLAIMER_NOTICES = {
     title: '完工確認',
     badge: '出貨拍照確認',
     content:
-      '出貨前，我們會先進行預組裝並拍攝照片（固定版型除外），透過 LINE 與您確認無誤後才會妥善加固打包出貨，讓您遠端安心驗貨。'
+      '出貨前，我會先進行預組裝並拍攝照片（固定版型除外），透過 LINE 與您確認無誤後才會妥善加固打包出貨，讓您遠端安心驗貨。'
   },
   toolsNotice: {
     title: '組裝工具提醒（重要）',
     badge: '建議自備工具',
     content:
-      '大型貓別墅組裝具一定挑戰性。為維持結構穩固與客製化彈性，板材僅預留「主要結構」孔洞，部分細部鎖點需自行定位。強烈建議您準備「電動螺絲起子」，並搭配我們由店長本人親自拍攝入鏡的教學影片進行。若遇困難，群內客服會隨時為您提供線上技術支援！'
+      '大型貓別墅組裝具一定挑戰性。為維持結構穩固與客製化彈性，板材僅預留「主要結構」孔洞，部分細部鎖點需自行定位。強烈建議您準備「電動螺絲起子」，並搭配由店長本人親自拍攝入鏡的教學影片進行。若遇困難，群內客服會隨時為您提供線上技術支援！'
   },
   shippingNotice: {
     title: '物流配送說明（新竹物流）',
@@ -311,14 +311,14 @@ export const FEATURED_MODELS: VillaModel[] = [
     includedAccessories: ['安全造型柵欄', '透氣格柵孔', '靜音煞車萬向輪'],
     recommendedCats: '1 隻成貓 / 幼貓小獨立套房',
     suitableSpace: '套房角落、臥室床邊、客廳電視旁',
-    highlights: ['面寬 60cm 超好擺放', '高透耐磨亞克力門', '純實木板厚度足 1.5cm'],
+    highlights: ['面寬 60cm 超好擺放', '高透耐磨壓克力門', '純實木板厚度足 1.5cm'],
     description: '輕巧省空間的小資單貓別墅，頂層設有可愛貓頭孔與透氣圍欄。',
     badge: '熱賣入門',
   },
   {
     id: 'm-90-60-90-a',
     name: 'B款（90-60-90）',
-    subtitle: '雙開亞克力門 · 實木爬梯 · 靜音萬向輪',
+    subtitle: '雙開壓克力門 · 實木爬梯 · 靜音萬向輪',
     heightGroup: '90',
     heightGroupLabel: '高 90cm 系列',
     dimensions: { height: 90, depth: 60, length: 90, dimensionCode: '90-60-90' },
@@ -326,7 +326,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     installFee: 2500,
     image: '/assets/aistudio/90-60-90_c0bac971.jpg',
     styleVariant: '階梯版',
-    includedAccessories: ['雙開亞克力門', '實木緩坡階梯', '二樓圍欄平台', '靜音煞車萬向輪'],
+    includedAccessories: ['雙開壓克力門', '實木緩坡階梯', '二樓圍欄平台', '靜音煞車萬向輪'],
     recommendedCats: '1 - 2 隻貓咪',
     suitableSpace: '客廳電視櫃旁、書房景觀牆',
     highlights: ['90cm 寬幅雙開門設計', '坡道適合短腿貓與幼貓', '頂部可置物'],
@@ -336,7 +336,7 @@ export const FEATURED_MODELS: VillaModel[] = [
   {
     id: 'm-90-60-90-b',
     name: 'B1款（90-60-90）',
-    subtitle: '雙開亞克力門 · 垂直劍麻抓柱 · 靈動跳板',
+    subtitle: '雙開壓克力門 · 垂直劍麻抓柱 · 靈動跳板',
     heightGroup: '90',
     heightGroupLabel: '高 90cm 系列',
     dimensions: { height: 90, depth: 60, length: 90, dimensionCode: '90-60-90' },
@@ -344,7 +344,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     installFee: 2500,
     image: '/assets/aistudio/B90-60-90_dc78aa1a.jpg',
     styleVariant: '抓柱版',
-    includedAccessories: ['雙開亞克力門', '天然劍麻磨爪柱', '貓頭休息房', '安全造型柵欄'],
+    includedAccessories: ['雙開壓克力門', '天然劍麻磨爪柱', '貓頭休息房', '安全造型柵欄'],
     recommendedCats: '1 - 2 隻貓咪',
     suitableSpace: '客廳過道、主臥景觀窗前',
     highlights: ['垂直抓柱結合休息平台', '雙開門清理貓砂極便利', '純實木板厚度 1.5cm'],
@@ -364,7 +364,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     installFee: 2500,
     image: '/assets/aistudio/120-60-60_587a0b85.jpg',
     styleVariant: '標準款',
-    includedAccessories: ['單開大片亞克力門', '二樓圍欄平台', '貓頭休息房', '底部萬向輪'],
+    includedAccessories: ['單開大片壓克力門', '二樓圍欄平台', '貓頭休息房', '底部萬向輪'],
     recommendedCats: '1 - 2 隻貓咪',
     suitableSpace: '小坪數客廳、主臥角落',
     highlights: ['1.2米垂直視野', '佔地面積小、高度充裕', '兩側通風百葉格柵'],
@@ -382,17 +382,17 @@ export const FEATURED_MODELS: VillaModel[] = [
     installFee: 3000,
     image: '/assets/aistudio/120-60-90_d44f97fc.jpg',
     styleVariant: '階梯版',
-    includedAccessories: ['全景雙開亞克力門', '實木緩坡階梯', '貓頭休息房', '底部萬向輪'],
+    includedAccessories: ['全景雙開壓克力門', '實木緩坡階梯', '貓頭休息房', '底部萬向輪'],
     recommendedCats: '2 隻成貓',
     suitableSpace: '客廳主位、書房走道',
-    highlights: ['多層次立體平台', '高透安全亞克力', '松木無甲醛上防水漆'],
+    highlights: ['多層次立體平台', '高透安全壓克力', '松木無甲醛上防水漆'],
     description: '店內最具性價比的黃金尺寸！兼具縱向高度與90cm大面寬，斜梯連通上下樓，雙貓生活更愜意。',
     badge: '人氣首選',
   },
   {
     id: 'm-120-60-90-b',
     name: 'D1款（120-60-90）',
-    subtitle: '高120 x 長90 cm · 雙開透明亞克力門 · 貓頭休息房',
+    subtitle: '高120 x 長90 cm · 雙開透明壓克力門 · 貓頭休息房',
     heightGroup: '120',
     heightGroupLabel: '高 120cm 系列',
     dimensions: { height: 120, depth: 60, length: 90, dimensionCode: '120-60-90' },
@@ -400,7 +400,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     installFee: 3000,
     image: '/assets/aistudio/B120-60-90_c49b37e1.jpg',
     styleVariant: '雙開門版',
-    includedAccessories: ['雙開透明亞克力門', '貓頭休息房', '獨立如廁貓砂盆空間', '靜音煞車萬向輪'],
+    includedAccessories: ['雙開透明壓克力門', '貓頭休息房', '獨立如廁貓砂盆空間', '靜音煞車萬向輪'],
     recommendedCats: '2 隻成貓',
     suitableSpace: '客廳旁、陽台遮陽處',
     highlights: ['純實木板厚度足 1.5cm', '貓頭休息房高空休憩', '雙開門大開口清砂便'],
@@ -436,7 +436,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     installFee: 3500,
     image: '/assets/aistudio/B120-60-120_0e734dd8.jpg',
     styleVariant: '雙休息房版',
-    includedAccessories: ['頂層對稱雙貓頭休息房', '大通透亞克力門', '中央雙開門大通道', '靜音煞車輪'],
+    includedAccessories: ['頂層對稱雙貓頭休息房', '大通透壓克力門', '中央雙開門大通道', '靜音煞車輪'],
     recommendedCats: '2 - 3 隻貓咪',
     suitableSpace: '客廳沙發旁、多貓住宅',
     highlights: ['雙貓各自擁有獨立休息房', '橫向伸展無拘無束', '防水漆保護日常易擦拭'],
@@ -456,7 +456,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     installFee: 3500,
     image: '/assets/aistudio/150-60-60_bc590492.jpg',
     styleVariant: '標準款',
-    includedAccessories: ['三層實木躍升平台', '高挑亞克力門', '頂層造型護欄', '劍麻抓柱'],
+    includedAccessories: ['三層實木躍升平台', '高挑壓克力門', '頂層造型護欄', '劍麻抓柱'],
     recommendedCats: '1 - 2 隻貓咪',
     suitableSpace: '挑高套房、樓梯轉角、窄牆面',
     highlights: ['極致佔地坪效', '高挑1.5米視野極佳', '通風格柵設計'],
@@ -474,7 +474,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     installFee: 4000,
     image: '/assets/aistudio/150-60-90_4f890318.jpg',
     styleVariant: '標準挑高版',
-    includedAccessories: ['貓頭休息房', '大開口雙開亞克力門', '實木活動跳台', '底部大容量貓砂盆位'],
+    includedAccessories: ['貓頭休息房', '大開口雙開壓克力門', '實木活動跳台', '底部大容量貓砂盆位'],
     recommendedCats: '2 - 3 隻貓咪',
     suitableSpace: '客廳主位、寵物房',
     highlights: ['高度150cm大氣巍峨', '純實木板厚度足 1.5cm', '免運不含偏遠與離島'],
@@ -531,7 +531,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     includedAccessories: ['附通天柱*1', '安全造型柵欄*1', '高空浪漫吊橋', '雙貓頭休息房'],
     recommendedCats: '2 - 4 隻貓咪',
     suitableSpace: '大坪數客廳、寵物咖啡廳',
-    highlights: ['空中吊橋趣味滿分', '左右分區獨立套房', '全透明高透亞克力'],
+    highlights: ['空中吊橋趣味滿分', '左右分區獨立套房', '全透明高透壓克力'],
     description: '配有精緻木造空中吊橋與上下兩座貓頭休息房，如同小型主題樂園，看著貓咪過吊橋模樣超級療癒。',
     badge: '夢幻吊橋',
   },
@@ -546,7 +546,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     installFee: 6000,
     image: '/assets/aistudio/150-60-150_c0c982c9.jpg',
     styleVariant: '三門大開口版',
-    includedAccessories: ['附通天柱*1', '附安全造型柵欄*1', '三扇獨立亞克力門', '多層貓頭休息房'],
+    includedAccessories: ['附通天柱*1', '附安全造型柵欄*1', '三扇獨立壓克力門', '多層貓頭休息房'],
     recommendedCats: '3 - 5 隻貓咪',
     suitableSpace: '豪宅客廳、多貓家庭、專業育種貓舍',
     highlights: ['長達 1.5 米震撼面寬', '三扇大門通風無死角', '標配通天柱與安全造型柵欄'],
@@ -564,7 +564,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     installFee: 6000,
     image: '/assets/aistudio/B150-60-150_8a26d08b.jpg',
     styleVariant: '三門全能吊橋版',
-    includedAccessories: ['附通天柱*1', '附安全造型柵欄*1', '空中吊橋', '三扇獨立亞克力門'],
+    includedAccessories: ['附通天柱*1', '附安全造型柵欄*1', '空中吊橋', '三扇獨立壓克力門'],
     recommendedCats: '3 - 5 隻貓咪',
     suitableSpace: '整面客廳主景觀牆、商業展示空間',
     highlights: ['如微型原木遊樂園', '純實木板厚度 1.5cm', '出貨預組裝拍照確認'],
@@ -602,7 +602,7 @@ export const FEATURED_MODELS: VillaModel[] = [
     installFee: 6000,
     image: '/assets/aistudio/B180-60-120_c81f8495.jpg',
     styleVariant: '上下四門款',
-    includedAccessories: ['附通天柱*1', '附安全造型柵欄*1', '上下四組獨立開門', '通透亞克力門片'],
+    includedAccessories: ['附通天柱*1', '附安全造型柵欄*1', '上下四組獨立開門', '通透壓克力門片'],
     recommendedCats: '3 - 5 隻貓咪',
     suitableSpace: '客廳旁、陽台透天客廳',
     highlights: ['上下四組獨立開門', '附通天柱與安全造型柵欄', '1年非人為保固'],
@@ -641,7 +641,7 @@ export const ACCESSORY_OPTIONS: AccessoryOption[] = [
     id: 'acc-capsule',
     name: '太空艙基礎款（直徑25）',
     price: 1000,
-    description: '高透壓克力碗狀太空艙，由下仰望肉球療癒必備（直徑25cm標準款，價值1000）',
+    description: '高透壓克力碗狀太空艙，由下仰望肉球療癒必備',
     iconName: 'Compass'
   },
   {
@@ -803,14 +803,14 @@ export interface HuaHuaPhoto {
 }
 
 export const HUA_HUA_STORY = {
-catName: '花花（HuaHua）',
+  catName: '花花（HuaHua）',
   storeName: '花花招財貓',
   birthday: '2021年6月23日',
   gender: '母貓（已絕育）',
   breed: '英國短毛貓 (英短藍貓)',
   role: '品牌靈感 Muse · 臺中豐原門店榮譽店長',
   biography: [
-    '「花花」是我們在懷孕母貓身邊親自接生的小生命。當時母貓一共生了 3 隻小貓，花花是最後一隻出生、也是體型最微小的早產貓。因為貓媽媽是第一次生寶寶完全沒有經驗，小貓的臍帶都是店長親自拿著剪刀小心翼翼剪斷的。',
+    '「花花」是我在懷孕母貓身邊親自接生的小生命。當時母貓一共生了 3 隻小貓，花花是最後一隻出生、也是體型最微小的早產貓。因為貓媽媽是第一次生寶寶完全沒有經驗，小貓的臍帶都是店長親自拿著剪刀小心翼翼剪斷的。',
     '由於是早產兒，體質非常微弱纖小，哪怕身旁只有另外兩隻手足，花花也爭搶不到母乳喝。看著奄奄一息的小身軀，店長毅然決然承擔起全職貓爸的責任，不分晝夜、每隔兩三個小時親自拿小針筒與奶瓶，一滴一滴將花花親手餵養長大。',
     '後來為花花選購生活用具時，滿懷期待在網路上購買了貓別墅，拆箱後卻發現迎面而來刺鼻刺眼的劣質膠水味與劣質碎木，小貓根本不敢進去。這段心疼的經歷讓店長下定決心：一定要親自創立【花花招財貓】，專注打造純天然松木無甲醛、純實木板厚度足足 1.5cm 的高品質貓城堡，讓全台灣的小貓都能生活在真正健康、溫暖、安全的家！',
     '現在的花花已經健康長大、圓滾滾又黏人，偶爾還會親自到臺中豐原門店「上班」當榮譽小店長巡視呢！'
@@ -926,9 +926,9 @@ export const INITIAL_SHOWCASE_PHOTOS: ShowcasePhoto[] = [
     sizeCategory: '120',
     dimensionsText: '高150 x 深60 x 長120 cm',
     imageUrl: '/assets/aistudio/150-60-120_ff9034d7.jpg',
-    customerNote: '客製天然松木無甲醛，純實木板厚度足 1.5cm，表面微防水漆，透光耐磨亞克力雙開門，標配通天抓柱與實木柵欄。',
+    customerNote: '客製天然松木無甲醛，純實木板厚度足 1.5cm，表面微防水漆，透光耐磨壓克力雙開門，標配通天抓柱與實木柵欄。',
     date: '2026年 完工實拍',
-    tags: ['通天柱', '實木柵欄', '天然松木', '亞克力門']
+    tags: ['通天柱', '實木柵欄', '天然松木', '壓克力門']
   },
   {
     id: 'sc-2',
@@ -956,7 +956,7 @@ export const INITIAL_SHOWCASE_PHOTOS: ShowcasePhoto[] = [
     sizeCategory: '90',
     dimensionsText: '高120 x 深60 x 長90 cm',
     imageUrl: '/assets/aistudio/B120-60-90_c49b37e1.jpg',
-    customerNote: '客廳電視牆黃金尺寸，天然松木無甲醛，純實木厚度 1.5cm，高透亞克力門讓貓咪曬太陽超愜意。',
+    customerNote: '客廳電視牆黃金尺寸，天然松木無甲醛，純實木厚度 1.5cm，高透壓克力門讓貓咪曬太陽超愜意。',
     date: '2026年 完工實拍',
     tags: ['雙門', '劍麻柱', '90cm黃金面寬']
   },
@@ -969,37 +969,47 @@ export const INITIAL_SHOWCASE_PHOTOS: ShowcasePhoto[] = [
     customerNote: '小資單貓獨立套房，帶萬向輪好移動打掃，底層可容納大號貓砂盆，全台免運費（偏遠與離島除外）。',
     date: '2026年 完工實拍',
     tags: ['單貓套房', '萬向煞車輪', '小宅首選']
+  },
+  {
+    id: 'sc-custom-1',
+    title: '183-73-142 特殊畸零空間量身客製款',
+    sizeCategory: 'custom',
+    dimensionsText: '高183 x 深73 x 長142 cm（依屋主畸零空間特殊訂製）',
+    imageUrl: '/assets/aistudio/C180-60-120_080ab68b.jpg',
+    customerNote: '依照家中畸零空間量身打造！高度183cm頂天立地、深度加大至73cm、面寬142cm，純實木板厚度足1.5cm，出貨前預組裝實拍確認。',
+    date: '2026年 完工實拍',
+    tags: ['特殊客製', '高183cm', '深73cm', '長142cm', '依圖訂製']
   }
 ];
 
 export const FAQS = [
   {
     q: '花花招財貓的板材厚度與門片是什麼材質？',
-    a: '我們的初心就是「不想貓咪住到爛木頭」！本賣場全純實木板厚度皆足足有 1.5cm，堅固厚實可以使用很久，遠勝於市面劣質薄板或貼皮碎木板。我們堅持採用「天然松木無甲醛」板材，表面塗刷些許環保防水漆保護木質防潮防潑水。透明門片並非使用易碎沉重的玻璃，而是全面採用「高透耐磨安全亞克力板」，透光通透無阻、輕盈防撞且抗碎裂，保障貓咪嬉戲時的絕對安全。'
+    a: '我的初心就是「不想貓咪住到爛木頭」！本賣場全純實木板厚度皆足足有 1.5cm，堅固厚實可以使用很久，遠勝於市面劣質薄板或貼皮碎木板。我堅持採用「天然松木無甲醛」板材，表面塗刷些許環保防水漆保護木質防潮防潑水。透明門片並非使用易碎沉重的玻璃，而是全面採用「高透耐磨安全壓克力板」，透光通透無阻、輕盈防撞且抗碎裂，保障貓咪嬉戲時的絕對安全。'
   },
   {
     q: '深度可以超過 60cm 嗎？高度可以超過 180cm 嗎？價格如何計算？',
-    a: '完全可以！我們提供全套深度與高度客製化服務：\n1. 深度超過 60cm：每 10cm 一個計費區間（例如 61-70cm 加收 NT$ 3,000；71-80cm 加收 NT$ 6,000；81-90cm 加收 NT$ 9,000，以此類推）。\n2. 高度超過 180cm：每 10cm 一個計費區間（例如 181-190cm 加收 NT$ 1,000；191-200cm 加收 NT$ 2,000；201-210cm 加收 NT$ 3,000，以此類推）。\n客製化安裝費用會根據實際尺寸大小與樣式彈性報價，歡迎隨時加 LINE 諮詢！'
+    a: '完全可以！我提供全套深度與高度客製化服務：\n1. 深度超過 60cm：每 10cm 一個計費區間（例如 61-70cm 加收 NT$ 3,000；71-80cm 加收 NT$ 6,000；81-90cm 加收 NT$ 9,000，以此類推）。\n2. 高度超過 180cm：每 10cm 一個計費區間（例如 181-190cm 加收 NT$ 1,000；191-200cm 加收 NT$ 2,000；201-210cm 加收 NT$ 3,000，以此類推）。\n客製化安裝費用會根據實際尺寸大小與樣式彈性報價，歡迎隨時加 LINE 諮詢！'
   },
   {
     q: '我可以提供網路上看到的照片請您 1:1 製作嗎？',
-    a: '可以的！您可以把在網路上、社群看到喜歡的款式照片發到 LINE 給店長，我們這邊可以直接按照您提供的照片 1:1 打造，高度、深度、長度、隔層格局都能隨意修改量身定做。'
+    a: '可以的！您可以把在網路上、社群看到喜歡的款式照片發到 LINE 給店長，我這邊可以直接按照您提供的照片 1:1 打造，高度、深度、長度、隔層格局都能隨意修改量身訂做。'
   },
   {
     q: '產地在哪裡？運送需要運費嗎？出貨前會確認嗎？',
-    a: '我們的客製化工廠位於大陸，專注高品質貓別墅生產。製作完成後直寄台灣，享有【免運費】配送到府（免運不包含偏遠地區還有離島）！為了保障品質，出貨前我們會先在廠內進行「預組裝並拍攝完整實拍照片」（固定版型除外），透過 LINE 與您線上確認無誤後才會妥善加固打包發貨。'
+    a: '我的客製化工廠位於大陸，專注高品質貓別墅生產。製作完成後直寄台灣，享有【免運費】配送到府（免運不包含偏遠地區還有離島）！為了保障品質，出貨前我會先在廠內進行「預組裝並拍攝完整實拍照片」（固定版型除外），透過 LINE 與您線上確認無誤後才會妥善加固打包出貨。'
   },
   {
     q: '物流配送方式為何？如果現場需要爬樓梯怎麼辦？',
-    a: '大型貓別墅使用的是「新竹物流」負責配送，原則上「僅配送至一樓」，敬請見諒。若您需要我們師傅到府組裝且現場無電梯需爬樓梯搬運，請於訂購時「提前報備」，會依樓層酌收額外樓層搬運費，具體可於 LINE 中確認。物流運輸過程中若有極輕微的摩擦痕跡，或原木本身的自然木紋、微小結痂，屬於自然現象，不影響整體堅固與美觀。'
+    a: '大型貓別墅使用的是「新竹物流」負責配送，原則上「僅配送至一樓」，敬請見諒。若您需要師傅到府組裝且現場無電梯需爬樓梯搬運，請於訂購時「提前報備」，會依樓層酌收額外樓層搬運費，具體可於 LINE 中確認。物流運輸過程中若有極輕微的摩擦痕跡，或原木本身的自然木紋、微小結痂，屬於自然現象，不影響整體堅固與美觀。'
   },
   {
     q: '自行組裝會很困難嗎？需要準備什麼工具？',
-    a: '大型貓別墅組裝具一定挑戰性。為維持結構穩固與客製化彈性，板材僅預留「主要結構」孔洞，部分細部鎖點需自行定位。強烈建議您自備「電動螺絲起子」，並搭配我們「由店長本人親自拍攝入鏡示範的組裝教學影片」進行，若遇困難，群內客服會隨時為您提供線上技術支援！'
+    a: '大型貓別墅組裝具一定挑戰性。為維持結構穩固與客製化彈性，板材僅預留「主要結構」孔洞，部分細部鎖點需自行定位。強烈建議您自備「電動螺絲起子」，並搭配「由店長本人親自拍攝入鏡示範的組裝教學影片」進行，若遇困難，群內客服會隨時為您提供線上技術支援！'
   },
   {
     q: '如果需要到府組裝，安裝費與車馬費如何計算？',
-    a: '我們提供專業師傅全台到府安裝定位服務！安裝工資依貓別墅尺寸規格訂價，車馬費則以門店「臺中豐原」出發計算來回里程與國道耗損。為了減輕貓爸媽負擔，店長主動吸收零頭讓利（例如臺中市區/豐原僅酌收親民價200元、彰化苗栗500元、新竹900元、雙北1,700元、高雄2,400元），您可以在網站上的「即時估價試算機」直接選擇所在縣市查看精確報價！'
+    a: '提供專業師傅全台到府安裝定位服務！安裝工資依貓別墅尺寸規格訂價，車馬費則以門店「臺中豐原」出發計算來回里程與國道耗損。為了減輕貓爸媽負擔，店長主動吸收零頭讓利（例如臺中市區/豐原僅酌收親民價200元、彰化苗栗500元、新竹900元、雙北1,700元、高雄2,400元），您可以在網站上的「即時估價試算機」直接選擇所在縣市查看精確報價！'
   },
   {
     q: '售後保固多久？如果收到時有損壞怎麼處理？',

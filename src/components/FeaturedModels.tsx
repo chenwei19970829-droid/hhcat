@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FEATURED_MODELS, VillaModel, STORE_INFO } from '../data/catVillaData';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { compressImage } from '../utils/imageCompressor';
 import {
   Maximize2,
   Calculator,
@@ -243,7 +246,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
   const [formError, setFormError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load models from localStorage and filter out deleted ones
+  // Load models: first from localStorage, and subscribe to Firestore for real-time cloud sync across phones & PCs
   useEffect(() => {
     try {
       const deletedJson = localStorage.getItem(DELETED_MODELS_KEY);
@@ -255,7 +258,6 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
       if (savedJson) {
         const parsed: VillaModel[] = JSON.parse(savedJson);
         if (Array.isArray(parsed)) {
-          // Map default models with custom overrides / additions
           const customAdded = parsed.filter((m) => m.isCustomUpload);
           const editedDefaults = parsed.filter((m) => !m.isCustomUpload);
 
@@ -277,6 +279,63 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
       console.warn('Failed to load featured models from storage', e);
       setModels(FEATURED_MODELS);
     }
+
+    // Subscribe to Firestore real-time updates for immediate customer preview across devices
+    const unsubscribe = onSnapshot(
+      collection(db, 'featuredModels'),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const remoteModels: VillaModel[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data.fullModelData) {
+              try {
+                remoteModels.push(JSON.parse(data.fullModelData));
+              } catch (e) {
+                console.warn(e);
+              }
+            } else if (data.id && data.title) {
+              remoteModels.push({
+                id: data.id,
+                name: data.title,
+                subtitle: data.tagline || '純實木板厚度足 1.5cm',
+                heightGroup: (data.category as any) || '150',
+                heightGroupLabel: `高 ${data.category || '150'}cm 系列`,
+                dimensions: {
+                  height: 150,
+                  depth: 60,
+                  length: 120,
+                  dimensionCode: data.dimensions || '150-60-120'
+                },
+                price: 13800,
+                installFee: 4500,
+                image: data.imageUrl,
+                recommendedCats: '1 - 3 隻貓咪',
+                suitableSpace: '客廳主位、寵物房',
+                description: `${data.dimensions || '150-60-120'} 客製款式，純實木板足 1.5cm`,
+                highlights: data.highlights || ['純實木板厚度足 1.5cm'],
+                includedAccessories: data.features || ['高透耐磨安全壓克力門'],
+                isCustomUpload: true
+              });
+            }
+          });
+
+          if (remoteModels.length > 0) {
+            setModels((prev) => {
+              const remainingDefaults = FEATURED_MODELS.filter(
+                (orig) => !remoteModels.some((r) => r.id === orig.id)
+              );
+              return [...remoteModels, ...remainingDefaults];
+            });
+          }
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'featuredModels');
+      }
+    );
+
+    return () => unsubscribe();
   }, []);
 
   const saveModelsToStorage = (updatedList: VillaModel[]) => {
@@ -348,7 +407,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     setIsFormModalOpen(true);
   };
 
-  const handleDeleteModel = (model: VillaModel, e: React.MouseEvent) => {
+  const handleDeleteModel = async (model: VillaModel, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isOwner) {
       setAuthActionTitle('刪除款式卡片');
@@ -370,10 +429,17 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
 
       const updated = models.filter((m) => m.id !== model.id);
       saveModelsToStorage(updated);
+
+      // Cloud Firestore delete
+      try {
+        await deleteDoc(doc(db, 'featuredModels', model.id));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `featuredModels/${model.id}`);
+      }
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -382,17 +448,13 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
       return;
     }
 
-    if (file.size > 8 * 1024 * 1024) {
-      setFormError('圖片大小請小於 8MB');
-      return;
+    try {
+      setFormError('');
+      const compressed = await compressImage(file, 1200, 0.82);
+      setFormImage(compressed);
+    } catch (err: any) {
+      setFormError('圖片處理失敗，請換一張再試');
     }
-
-    setFormError('');
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setFormImage(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleAddHighlightTag = () => {
@@ -411,7 +473,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     setFormHighlights(formHighlights.filter((_, i) => i !== index));
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
       setFormError('請輸入款式名稱');
@@ -427,36 +489,57 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
 
     if (editingModelId) {
       // Update existing
-      const updated = models.map((m) => {
-        if (m.id === editingModelId) {
-          return {
-            ...m,
-            name: formName.trim(),
-            subtitle: formSubtitle.trim(),
-            heightGroup: formHeightGroup,
-            heightGroupLabel,
-            dimensions: {
-              height: formHeight,
-              depth: formDepth,
-              length: formLength,
-              dimensionCode
-            },
-            price: formPrice,
-            installFee: formInstallFee,
-            image: formImage,
-            badge: formBadge.trim() || undefined,
-            recommendedCats: formRecommendedCats.trim() || '1 - 3 隻貓咪',
-            highlights: formHighlights,
-            includedAccessories: formHighlights
-          };
-        }
-        return m;
-      });
+      const updatedModel: VillaModel = {
+        id: editingModelId,
+        name: formName.trim(),
+        subtitle: formSubtitle.trim(),
+        heightGroup: formHeightGroup,
+        heightGroupLabel,
+        dimensions: {
+          height: formHeight,
+          depth: formDepth,
+          length: formLength,
+          dimensionCode
+        },
+        price: formPrice,
+        installFee: formInstallFee,
+        image: formImage,
+        badge: formBadge.trim() || undefined,
+        recommendedCats: formRecommendedCats.trim() || '1 - 3 隻貓咪',
+        suitableSpace: '客廳主位、寵物房',
+        highlights: formHighlights,
+        includedAccessories: formHighlights,
+        description: `${dimensionCode} 客製款式，純實木板足 1.5cm，提供出貨前預組裝拍照與 1 年保固。`,
+        isCustomUpload: true
+      };
+
+      const updated = models.map((m) => (m.id === editingModelId ? updatedModel : m));
       saveModelsToStorage(updated);
+
+      // Cloud sync to Firestore
+      try {
+        await setDoc(doc(db, 'featuredModels', editingModelId), {
+          id: editingModelId,
+          title: updatedModel.name,
+          tagline: updatedModel.subtitle,
+          price: `NT$ ${updatedModel.price.toLocaleString()}`,
+          category: updatedModel.heightGroup,
+          dimensions: dimensionCode,
+          isCustomUpload: true,
+          imageUrl: updatedModel.image,
+          highlights: updatedModel.highlights || [],
+          features: updatedModel.includedAccessories || [],
+          fullModelData: JSON.stringify(updatedModel),
+          updatedAt: new Date().toISOString()
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `featuredModels/${editingModelId}`);
+      }
     } else {
       // Add new
+      const newId = `model-custom-${Date.now()}`;
       const newModel: VillaModel = {
-        id: `model-custom-${Date.now()}`,
+        id: newId,
         name: formName.trim(),
         subtitle: formSubtitle.trim() || '純實木板厚度足 1.5cm · 天然松木無甲醛',
         heightGroup: formHeightGroup,
@@ -478,7 +561,28 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
         description: `${dimensionCode} 客製款式，純實木板足 1.5cm，提供出貨前預組裝拍照與 1 年保固。`,
         isCustomUpload: true
       };
+
       saveModelsToStorage([newModel, ...models]);
+
+      // Cloud sync to Firestore
+      try {
+        await setDoc(doc(db, 'featuredModels', newId), {
+          id: newId,
+          title: newModel.name,
+          tagline: newModel.subtitle,
+          price: `NT$ ${newModel.price.toLocaleString()}`,
+          category: newModel.heightGroup,
+          dimensions: dimensionCode,
+          isCustomUpload: true,
+          imageUrl: newModel.image,
+          highlights: newModel.highlights || [],
+          features: newModel.includedAccessories || [],
+          fullModelData: JSON.stringify(newModel),
+          createdAt: new Date().toISOString()
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `featuredModels/${newId}`);
+      }
     }
 
     setIsFormModalOpen(false);

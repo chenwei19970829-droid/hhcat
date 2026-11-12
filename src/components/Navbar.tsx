@@ -11,6 +11,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
   const [showQrPopover, setShowQrPopover] = useState(false);
 
   const navLinks = [
+    { label: '門市現貨', href: '#instock' },
     { label: '精選款式', href: '#models' },
     { label: '品牌故事', href: '#story' },
     { label: '客製相冊', href: '#showcase' },
@@ -22,8 +23,16 @@ export const Navbar: React.FC<NavbarProps> = () => {
     { label: '門店聯絡', href: '#contact' }
   ];
 
-  const handleNavClick = () => {
+  const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    e.preventDefault();
     setMobileMenuOpen(false);
+    const targetId = href.replace('#', '');
+    const element = document.getElementById(targetId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      window.location.hash = href;
+    }
   };
 
   return (
@@ -51,6 +60,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
               <a
                 key={link.href}
                 href={link.href}
+                onClick={(e) => scrollToSection(e, link.href)}
                 className="hover:text-amber-800 transition-colors whitespace-nowrap py-1 relative after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-0 after:h-0.5 after:bg-amber-800 hover:after:w-full after:transition-all"
               >
                 {link.label}
@@ -150,7 +160,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
               <a
                 key={link.href}
                 href={link.href}
-                onClick={handleNavClick}
+                onClick={(e) => scrollToSection(e, link.href)}
                 className="px-3 py-2.5 rounded-lg hover:bg-stone-100 transition-colors"
               >
                 {link.label}

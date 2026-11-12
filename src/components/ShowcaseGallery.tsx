@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ShowcasePhoto, INITIAL_SHOWCASE_PHOTOS, STORE_INFO } from '../data/catVillaData';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { compressImage } from '../utils/imageCompressor';
 import { Upload, Plus, Filter, Maximize2, Trash2, CheckCircle, Image as ImageIcon, MessageCircle, AlertCircle, Lock, ChevronDown, ChevronUp } from 'lucide-react';
+
 // Store Owner Auth Inline Helper for ShowcaseGallery
 const AUTH_STORAGE_KEY = 'hhcat_store_owner_auth_v1';
 const VALID_PASSKEYS = ['david19970829'];
@@ -209,7 +213,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load photos: always ensure INITIAL_SHOWCASE_PHOTOS exist, merged with any store owner custom uploads, minus deleted IDs
+  // Load photos: from localStorage and subscribe to Firestore for real-time cloud sync across phones & PCs
   useEffect(() => {
     try {
       const deletedJson = localStorage.getItem(DELETED_SHOWCASE_KEY);
@@ -235,9 +239,55 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       console.warn('Error reading showcase photos:', e);
       setPhotos(INITIAL_SHOWCASE_PHOTOS);
     }
+
+    // Subscribe to Firestore for live showcase photo sync
+    const unsubscribe = onSnapshot(
+      collection(db, 'showcasePhotos'),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const remotePhotos: ShowcasePhoto[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data.fullPhotoData) {
+              try {
+                remotePhotos.push(JSON.parse(data.fullPhotoData));
+              } catch (e) {
+                console.warn(e);
+              }
+            } else if (data.id && data.title && data.imageUrl) {
+              remotePhotos.push({
+                id: data.id,
+                title: data.title,
+                sizeCategory: (data.dimensions?.split('-')[0] as any) || '150',
+                dimensionsText: data.dimensions || '150-60-120',
+                imageUrl: data.imageUrl,
+                customerNote: data.description || '店主精選客製實品照',
+                date: '剛剛新增',
+                tags: data.tags || ['客製實品'],
+                isCustomUpload: true
+              });
+            }
+          });
+
+          if (remotePhotos.length > 0) {
+            setPhotos((prev) => {
+              const remainingDefaults = INITIAL_SHOWCASE_PHOTOS.filter(
+                (orig) => !remotePhotos.some((r) => r.id === orig.id)
+              );
+              return [...remotePhotos, ...remainingDefaults];
+            });
+          }
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'showcasePhotos');
+      }
+    );
+
+    return () => unsubscribe();
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -246,20 +296,16 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       return;
     }
 
-    if (file.size > 8 * 1024 * 1024) {
-      setUploadError('圖片檔案大小請在 8MB 以內');
-      return;
+    try {
+      setUploadError(null);
+      const compressed = await compressImage(file, 1200, 0.82);
+      setPreviewImage(compressed);
+    } catch (err) {
+      setUploadError('圖片處理失敗，請換一張再試');
     }
-
-    setUploadError(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPreviewImage(reader.result as string);
-    };
-    reader.readAsDataURL(file);
   };
 
-  const handleSavePhoto = (e: React.FormEvent) => {
+  const handleSavePhoto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!previewImage) {
       setUploadError('請先選擇要上傳的貓別墅實品照片！');
@@ -273,8 +319,9 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
 
     setIsUploading(true);
 
+    const newId = `custom-${Date.now()}`;
     const newPhoto: ShowcasePhoto = {
-      id: `custom-${Date.now()}`,
+      id: newId,
       title: uploadTitle.trim(),
       sizeCategory: uploadSizeCategory,
       dimensionsText: uploadDimensions.trim() || `${uploadSizeCategory}cm 系列`,
@@ -291,6 +338,26 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     } catch (err) {
       console.warn('LocalStorage limit reached or disabled:', err);
+    }
+
+    // Save to Cloud Firestore
+    try {
+      await setDoc(doc(db, 'showcasePhotos', newId), {
+        id: newId,
+        title: newPhoto.title,
+        client: '台中店主實品',
+        location: '臺中豐原門店',
+        dimensions: newPhoto.dimensionsText,
+        description: newPhoto.customerNote,
+        imageUrl: newPhoto.imageUrl,
+        tags: newPhoto.tags,
+        likes: 12,
+        isCustomUpload: true,
+        fullPhotoData: JSON.stringify(newPhoto),
+        createdAt: new Date().toISOString()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `showcasePhotos/${newId}`);
     }
 
     // Reset Form
@@ -317,7 +384,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
     }
   };
 
-  const handleDeletePhoto = (photo: ShowcasePhoto, e: React.MouseEvent) => {
+  const handleDeletePhoto = async (photo: ShowcasePhoto, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isOwner) {
       setAuthActionTitle('刪除客製相冊照片');
@@ -343,6 +410,13 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     } catch (err) {
       console.error(err);
+    }
+
+    // Delete from Cloud Firestore
+    try {
+      await deleteDoc(doc(db, 'showcasePhotos', photo.id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `showcasePhotos/${photo.id}`);
     }
   };
 

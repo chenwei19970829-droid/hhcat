@@ -199,7 +199,12 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
   const [photos, setPhotos] = useState<ShowcasePhoto[]>([]);
   const [selectedSize, setSelectedSize] = useState<'all' | '60' | '90' | '120' | '150' | '180' | 'custom'>('all');
   const [showAllPhotos, setShowAllPhotos] = useState(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedSize, showAllPhotos]);
 
   // Upload Form State
   const [uploadTitle, setUploadTitle] = useState('');
@@ -240,48 +245,44 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       setPhotos(INITIAL_SHOWCASE_PHOTOS);
     }
 
-    // Subscribe to Firestore real-time photo updates
+    // Subscribe to Firestore for live showcase photo sync
     const unsubscribe = onSnapshot(
       collection(db, 'showcasePhotos'),
       (snapshot) => {
-        const deletedIdsFromCloud = new Set<string>();
-        const remotePhotos: ShowcasePhoto[] = [];
-
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          if (data.deleted === true) {
-            deletedIdsFromCloud.add(data.id || docSnap.id);
-          } else if (data.fullPhotoData) {
-            try {
-              const photo = JSON.parse(data.fullPhotoData);
-              if (photo && photo.id) {
-                remotePhotos.push(photo);
+        if (!snapshot.empty) {
+          const remotePhotos: ShowcasePhoto[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data.fullPhotoData) {
+              try {
+                remotePhotos.push(JSON.parse(data.fullPhotoData));
+              } catch (e) {
+                console.warn(e);
               }
-            } catch (e) {
-              console.warn('JSON parse error:', e);
+            } else if (data.id && data.title && data.imageUrl) {
+              remotePhotos.push({
+                id: data.id,
+                title: data.title,
+                sizeCategory: (data.dimensions?.split('-')[0] as any) || '150',
+                dimensionsText: data.dimensions || '150-60-120',
+                imageUrl: data.imageUrl,
+                customerNote: data.description || '店主精選客製實品照',
+                date: '剛剛新增',
+                tags: data.tags || ['客製實品'],
+                isCustomUpload: true
+              });
             }
-          } else if (data.id && data.title && data.imageUrl) {
-            remotePhotos.push({
-              id: data.id,
-              title: data.title,
-              sizeCategory: (data.dimensions?.split('-')[0] as any) || '150',
-              dimensionsText: data.dimensions || '150-60-120',
-              imageUrl: data.imageUrl,
-              customerNote: data.description || '店主精選客製實品照',
-              date: '剛剛新增',
-              tags: data.tags || ['客製實品'],
-              isCustomUpload: true
+          });
+
+          if (remotePhotos.length > 0) {
+            setPhotos((prev) => {
+              const remainingDefaults = INITIAL_SHOWCASE_PHOTOS.filter(
+                (orig) => !remotePhotos.some((r) => r.id === orig.id)
+              );
+              return [...remotePhotos, ...remainingDefaults];
             });
           }
-        });
-
-        setPhotos(() => {
-          const activeDefaults = INITIAL_SHOWCASE_PHOTOS.filter(
-            (orig) => !deletedIdsFromCloud.has(orig.id) && !remotePhotos.some((r) => r.id === orig.id)
-          );
-          const activeRemotes = remotePhotos.filter((r) => !deletedIdsFromCloud.has(r.id));
-          return [...activeRemotes, ...activeDefaults];
-        });
+        }
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, 'showcasePhotos');
@@ -302,7 +303,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
 
     try {
       setUploadError(null);
-      const compressed = await compressImage(file, 900, 0.72);
+      const compressed = await compressImage(file, 1200, 0.82);
       setPreviewImage(compressed);
     } catch (err) {
       setUploadError('圖片處理失敗，請換一張再試');
@@ -344,7 +345,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       console.warn('LocalStorage limit reached or disabled:', err);
     }
 
-    // Save to Cloud Firestore for cross-device real-time sync
+    // Save to Cloud Firestore
     try {
       await setDoc(doc(db, 'showcasePhotos', newId), {
         id: newId,
@@ -370,7 +371,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
     setPreviewImage(null);
     setUploadTitle('');
     setUploadCustomerNote('');
-    setSelectedSize(uploadSizeCategory);
+    setSelectedSize(uploadSizeCategory); // Auto jump to the uploaded category!
   };
 
   const handleOpenUpload = (targetSize?: '60' | '90' | '120' | '150' | '180' | 'custom') => {
@@ -416,13 +417,9 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       console.error(err);
     }
 
-    // Mark as tombstone deleted in Cloud Firestore for cross-device real-time sync
+    // Delete from Cloud Firestore
     try {
-      await setDoc(doc(db, 'showcasePhotos', photo.id), {
-        id: photo.id,
-        deleted: true,
-        updatedAt: new Date().toISOString()
-      });
+      await deleteDoc(doc(db, 'showcasePhotos', photo.id));
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `showcasePhotos/${photo.id}`);
     }
@@ -433,10 +430,30 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
     return photo.sizeCategory === selectedSize;
   });
 
-  const displayedPhotos = showAllPhotos ? filteredPhotos : filteredPhotos.slice(0, 12);
+  const PAGE_SIZE = 12;
+  const totalPages = Math.ceil(filteredPhotos.length / PAGE_SIZE);
+
+  let displayedPhotos: ShowcasePhoto[] = [];
+  if (!showAllPhotos) {
+    displayedPhotos = filteredPhotos.slice(0, 6);
+  } else {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    displayedPhotos = filteredPhotos.slice(startIndex, startIndex + PAGE_SIZE);
+  }
+
+  const sectionRef = useRef<HTMLElement>(null);
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    if (sectionRef.current) {
+      sectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      document.getElementById('showcase')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   return (
-    <section id="showcase" className="py-16 sm:py-20 bg-[#FAF7F2] border-b border-stone-200 scroll-mt-20">
+    <section id="showcase" ref={sectionRef} className="py-16 sm:py-20 bg-[#FAF7F2] border-b border-stone-200 scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Heading & Owner Upload Button */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
@@ -535,6 +552,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
             );
           })}
 
+          {/* New Custom Size Category */}
           <button
             type="button"
             onClick={() => {
@@ -570,7 +588,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
                 className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-amber-900 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
               >
                 <Plus className="w-4 h-4" />
-                <span>立即上傳此尺寸照片</span>
+                <span>獨立上傳此尺寸照片</span>
               </button>
             )}
           </div>
@@ -659,28 +677,77 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
           </div>
         )}
 
-        {/* View More / Collapse Toggle Button */}
-        {filteredPhotos.length > 12 && (
-          <div className="text-center pt-8">
+        {/* View More & Pagination Controls */}
+        <div className="mt-10 space-y-4 text-center">
+          {!showAllPhotos && filteredPhotos.length > 6 && (
             <button
               type="button"
-              onClick={() => setShowAllPhotos(!showAllPhotos)}
-              className="inline-flex items-center gap-2 px-6 py-3 text-xs sm:text-sm font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl transition-all shadow-xs active:scale-[0.98]"
+              onClick={() => {
+                setShowAllPhotos(true);
+                setCurrentPage(1);
+              }}
+              className="inline-flex items-center gap-2 px-6 py-3 text-xs sm:text-sm font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
             >
-              {showAllPhotos ? (
-                <>
-                  <ChevronUp className="w-4 h-4" />
-                  <span>收起照片（顯示前 12 張）</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="w-4 h-4" />
-                  <span>查看更多客製實品照（還有 {filteredPhotos.length - 12} 張照片）</span>
-                </>
-              )}
+              <ChevronDown className="w-4 h-4" />
+              <span>查看全部客製實品照（共 {filteredPhotos.length} 張照片）</span>
             </button>
-          </div>
-        )}
+          )}
+
+          {showAllPhotos && (
+            <div className="space-y-4">
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                    className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    上一頁
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => handlePageChange(p)}
+                      className={`w-8 h-8 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        currentPage === p
+                          ? 'bg-amber-900 text-white shadow-xs'
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    disabled={currentPage === totalPages}
+                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                    className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    下一頁
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAllPhotos(false);
+                    setCurrentPage(1);
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-stone-600 bg-stone-200/80 hover:bg-stone-300 rounded-xl transition-all cursor-pointer"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                  <span>收起部分照片（恢復顯示預設前 6 張）</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Upload Modal for Store Owner */}
         {isUploadModalOpen && (
@@ -757,7 +824,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
                         點擊選擇照片 或 拖曳檔案至此
                       </p>
                       <p className="text-[11px] text-stone-400 mt-1">
-                        支援 JPG、PNG、WEBP，系統將自動秒速微縮壓縮上傳
+                        支援 JPG、PNG、WEBP，大小建議 8MB 內
                       </p>
                     </div>
                   )}

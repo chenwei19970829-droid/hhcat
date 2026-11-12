@@ -86,7 +86,7 @@ export const STORE_INFO = {
   travelFeeSheetImage: '/assets/aistudio/image_1f5360da.png',
   googleMapsUrl: 'https://maps.google.com/?q=' + encodeURIComponent('臺中市豐原區圓環西路97號 花花招財貓'),
   facebookName: '花花招財貓｜客製化實木貓別墅/貓櫃/貓籠',
-  facebookUrl: 'https://www.facebook.com/search/top?q=' + encodeURIComponent('花花招財貓'),
+ facebookUrl: 'https://www.facebook.com/profile.php?id=61586279835355',
   instagramHandle: 'hhcat.1226',
   instagramUrl: 'https://www.instagram.com/hhcat.1226',
   threadsUrl: 'https://www.threads.net/@hhcat.1226',

@@ -13,6 +13,21 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   onViewMenuImages,
   onOpenImageZoom
 }) => {
+  const getIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Hammer':
+        return <Hammer className="w-5 h-5 text-amber-800" />;
+      case 'ShieldCheck':
+        return <ShieldCheck className="w-5 h-5 text-amber-800" />;
+      case 'Sparkles':
+        return <Sparkles className="w-5 h-5 text-amber-800" />;
+      case 'Truck':
+        return <Truck className="w-5 h-5 text-amber-800" />;
+      default:
+        return <Sparkles className="w-5 h-5 text-amber-800" />;
+    }
+  };
+
   const handleZoomStorefront = () => {
     if (onOpenImageZoom) {
       onOpenImageZoom(
@@ -43,6 +58,25 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           {/* Left Column: Headlines & Brand Proposition */}
           <div className="order-2 lg:order-1 lg:col-span-7 space-y-6">
+            {/* Brand Logo & Title Pill */}
+            <div className="flex items-center gap-3 bg-white/90 border border-amber-900/15 shadow-sm rounded-2xl p-2.5 pr-4 w-fit">
+              <div className="w-12 h-12 rounded-xl overflow-hidden bg-white p-0.5 border border-amber-900/20 shrink-0">
+                <img
+                  src={STORE_INFO.logoImage || '/assets/aistudio/logo_6994c231.jpg'}
+                  alt="花花招財貓 LOGO"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div>
+                <span className="font-serif-title font-bold text-stone-900 text-base sm:text-lg block leading-tight">
+                  {STORE_INFO.name}
+                </span>
+                <span className="text-[11px] text-stone-500 font-medium block">
+                  手工客製實木貓別墅 · 台中豐原門店展示中心
+                </span>
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold text-amber-900 bg-amber-500/10 border border-amber-600/20 px-3.5 py-1.5 rounded-2xl w-fit">
               <span>天然松木無甲醛</span>
               <span aria-hidden="true">·</span>

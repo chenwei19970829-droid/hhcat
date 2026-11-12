@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { STORE_INFO } from '../data/catVillaData';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { compressImage } from '../utils/imageCompressor';
 import {
   PackageCheck,
   Plus,
@@ -7,9 +10,11 @@ import {
   Maximize2,
   MessageCircle,
   AlertTriangle,
+  Sparkles,
   Camera,
   CheckCircle,
   Lock,
+  ChevronRight,
   Truck,
   MapPin,
   X
@@ -198,12 +203,12 @@ const StoreOwnerAuthModal: React.FC<StoreOwnerAuthModalProps> = ({
 export interface InStockItem {
   id: string;
   title: string;
-  sizeTag: string;
-  priceText?: string;
+  sizeTag: string; // e.g. "180-60-90 cm"
+  priceText?: string; // e.g. "NT$ 21,900"
   status: 'available' | 'reserved' | 'sold';
-  mainImage: string;
-  interiorImage?: string;
-  detailImage?: string;
+  mainImage: string; // 整體主圖
+  interiorImage?: string; // 內飾圖
+  detailImage?: string; // 加裝詳細圖
   description: string;
   features: string[];
   isCustomUpload?: boolean;
@@ -267,6 +272,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
   const [selectedItemForModal, setSelectedItemForModal] = useState<InStockItem | null>(null);
   const [activePhotoTab, setActivePhotoTab] = useState<'main' | 'interior' | 'detail'>('main');
 
+  // Upload Form Modal State
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [formTitle, setFormTitle] = useState('');
   const [formSizeTag, setFormSizeTag] = useState('180-60-90 cm');
@@ -282,6 +288,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
   const interiorFileInputRef = useRef<HTMLInputElement>(null);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Load in-stock items from localStorage & subscribe to Firestore real-time cloud sync
   useEffect(() => {
     try {
       const deletedJson = localStorage.getItem(DELETED_KEY);
@@ -309,6 +316,55 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
       console.warn('Failed to load in-stock items', err);
       setItems(INITIAL_IN_STOCK_ITEMS);
     }
+
+    // Subscribe to Firestore for live inventory updates
+    const unsubscribe = onSnapshot(
+      collection(db, 'inStockItems'),
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const remoteItems: InStockItem[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data.fullItemData) {
+              try {
+                remoteItems.push(JSON.parse(data.fullItemData));
+              } catch (e) {
+                console.warn(e);
+              }
+            } else if (data.id && data.title && data.mainImage) {
+              remoteItems.push({
+                id: data.id,
+                title: data.title,
+                sizeTag: data.sizeTag || '依標記尺寸',
+                priceText: data.priceText,
+                status: (data.status as any) || 'available',
+                mainImage: data.mainImage,
+                interiorImage: data.interiorImage,
+                detailImage: data.detailImage,
+                description: data.description || '門店現成款式，已組裝完成',
+                features: data.features || ['純實木厚度足 1.5cm', '高透安全壓克力門'],
+                isCustomUpload: true,
+                dateAdded: data.dateAdded || '最新門市實拍'
+              });
+            }
+          });
+
+          if (remoteItems.length > 0) {
+            setItems((prev) => {
+              const remainingDefaults = INITIAL_IN_STOCK_ITEMS.filter(
+                (orig) => !remoteItems.some((r) => r.id === orig.id)
+              );
+              return [...remoteItems, ...remainingDefaults];
+            });
+          }
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'inStockItems');
+      }
+    );
+
+    return () => unsubscribe();
   }, []);
 
   const saveItems = (updated: InStockItem[]) => {
@@ -329,7 +385,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
     setIsUploadModalOpen(true);
   };
 
-  const handleDeleteItem = (item: InStockItem, e?: React.MouseEvent) => {
+  const handleDeleteItem = async (item: InStockItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!isOwner) {
       setAuthActionTitle('刪除現貨卡片');
@@ -358,10 +414,17 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
       if (selectedItemForModal?.id === item.id) {
         setSelectedItemForModal(null);
       }
+
+      // Delete from cloud Firestore
+      try {
+        await deleteDoc(doc(db, 'inStockItems', item.id));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `inStockItems/${item.id}`);
+      }
     }
   };
 
-  const handleFileReader = (
+  const handleFileReader = async (
     e: React.ChangeEvent<HTMLInputElement>,
     setter: (val: string) => void
   ) => {
@@ -371,18 +434,17 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
       setFormError('請選擇有效圖片檔案（JPG / PNG / WebP）');
       return;
     }
-    if (file.size > 8 * 1024 * 1024) {
-      setFormError('圖片大小請控制在 8MB 以內');
-      return;
+
+    try {
+      setFormError('');
+      const compressed = await compressImage(file, 1200, 0.82);
+      setter(compressed);
+    } catch (err) {
+      setFormError('圖片處理失敗，請重試');
     }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setter(event.target?.result as string);
-    };
-    reader.readAsDataURL(file);
   };
 
-  const handleUploadSubmit = (e: React.FormEvent) => {
+  const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!mainImagePreview) {
       setFormError('請至少上傳「整體主圖」！');
@@ -393,8 +455,9 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
       return;
     }
 
+    const newId = `instock-custom-${Date.now()}`;
     const newItem: InStockItem = {
-      id: `instock-custom-${Date.now()}`,
+      id: newId,
       title: formTitle.trim(),
       sizeTag: formSizeTag.trim() || '依標記尺寸',
       priceText: formPriceText.trim() || undefined,
@@ -416,6 +479,28 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
     const updated = [newItem, ...items];
     saveItems(updated);
 
+    // Save to Cloud Firestore
+    try {
+      await setDoc(doc(db, 'inStockItems', newId), {
+        id: newId,
+        title: newItem.title,
+        sizeTag: newItem.sizeTag,
+        priceText: newItem.priceText || '',
+        status: newItem.status,
+        mainImage: newItem.mainImage,
+        interiorImage: newItem.interiorImage || '',
+        detailImage: newItem.detailImage || '',
+        description: newItem.description,
+        features: newItem.features,
+        isCustomUpload: true,
+        fullItemData: JSON.stringify(newItem),
+        createdAt: new Date().toISOString()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `inStockItems/${newId}`);
+    }
+
+    // Reset Form
     setIsUploadModalOpen(false);
     setFormTitle('');
     setFormPriceText('');
@@ -429,6 +514,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
   return (
     <section id="instock" className="py-16 sm:py-24 bg-[#F5EFE6] border-b border-stone-300/80 scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold text-amber-900 bg-amber-200/60 border border-amber-300/80 mb-2.5">
@@ -443,6 +529,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
             </p>
           </div>
 
+          {/* Store Owner Upload Button */}
           <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
             <button
               type="button"
@@ -476,6 +563,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
           </div>
         </div>
 
+        {/* Important In-Stock Shipping & Self-Pickup Disclaimer Banner */}
         <div className="mb-10 p-4 sm:p-5 bg-amber-100/80 border-2 border-amber-300 rounded-2xl flex items-start gap-3.5 text-stone-800 shadow-xs">
           <div className="p-2 bg-amber-500/20 text-amber-900 rounded-xl shrink-0 mt-0.5">
             <Truck className="w-5 h-5 text-amber-900" />
@@ -491,6 +579,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
           </div>
         </div>
 
+        {/* In-Stock Items Grid */}
         {items.length === 0 ? (
           <div className="text-center py-16 bg-white/70 rounded-3xl border border-dashed border-stone-300">
             <PackageCheck className="w-12 h-12 text-stone-400 mx-auto mb-3" />
@@ -527,6 +616,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                 key={item.id}
                 className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-amber-700/50 transition-all flex flex-col group relative"
               >
+                {/* Photo Gallery Area */}
                 <div className="relative aspect-4/3 bg-stone-100 overflow-hidden">
                   <img
                     src={item.mainImage}
@@ -545,8 +635,10 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                     }}
                   />
 
+                  {/* Gradient Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-t from-stone-950/70 via-transparent to-black/20 pointer-events-none" />
 
+                  {/* Top Badges */}
                   <div className="absolute top-3.5 left-3.5 flex items-center gap-2">
                     <span className="px-2.5 py-1 bg-amber-900 text-white text-[11px] font-bold rounded-lg shadow-sm font-mono tracking-wide">
                       {item.sizeTag}
@@ -557,6 +649,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                     </span>
                   </div>
 
+                  {/* Zoom indicator button */}
                   <button
                     type="button"
                     onClick={() => {
@@ -572,6 +665,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                     <Maximize2 className="w-4 h-4" />
                   </button>
 
+                  {/* Multiple Detail Thumbnails bar if available */}
                   {(item.interiorImage || item.detailImage) && (
                     <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white text-xs">
                       <div className="flex items-center gap-1.5">
@@ -606,7 +700,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                               e.stopPropagation();
                               if (onOpenImageZoom) {
                                 onOpenImageZoom(
-                                  `${item.title} - 加裝詳細圖`,
+                                  `${item.title} - 加裝細節實拍`,
                                   item.detailImage!,
                                   '壓克力門片、通風百葉、五金鉸鏈與通天柱細節'
                                 );
@@ -635,6 +729,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                     </div>
                   )}
 
+                  {/* Owner Delete Button */}
                   {isOwner && (
                     <button
                       type="button"
@@ -648,6 +743,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                   )}
                 </div>
 
+                {/* Card Content */}
                 <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                   <div>
                     <div className="flex items-start justify-between gap-2">
@@ -665,6 +761,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                       {item.description}
                     </p>
 
+                    {/* Features checklist */}
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {item.features.map((ft, i) => (
                         <span
@@ -678,6 +775,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                     </div>
                   </div>
 
+                  {/* Card Bottom: In-Stock Self-Pickup Note & Direct Booking CTA */}
                   <div className="pt-3 border-t border-stone-100 space-y-2.5">
                     <div className="flex items-center justify-between text-[11px] text-stone-500">
                       <span className="flex items-center gap-1 text-amber-950 font-medium">
@@ -716,6 +814,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
         )}
       </div>
 
+      {/* Multi-photo Detail Inspection Modal for In-Stock Item */}
       {selectedItemForModal && (
         <div
           role="dialog"
@@ -727,6 +826,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
             className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-stone-200 max-h-[92vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-stone-200 flex items-center justify-between">
               <div>
                 <div className="text-[11px] font-bold text-amber-800 tracking-wider uppercase">
@@ -745,7 +845,9 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
               </button>
             </div>
 
+            {/* Modal Body: Active Image Display */}
             <div className="p-4 sm:p-6 overflow-y-auto space-y-4">
+              {/* Photo Selector Tabs */}
               <div className="flex items-center gap-2 border-b border-stone-100 pb-2">
                 <button
                   type="button"
@@ -786,6 +888,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                 )}
               </div>
 
+              {/* Displayed Image */}
               <div className="relative aspect-4/3 bg-stone-100 rounded-2xl overflow-hidden border border-stone-200 flex items-center justify-center">
                 <img
                   src={
@@ -800,6 +903,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                 />
               </div>
 
+              {/* Details & Self-Pickup Reminder */}
               <div className="space-y-2 text-xs sm:text-sm">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs font-bold px-2 py-0.5 bg-stone-100 rounded">
@@ -826,6 +930,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
               </div>
             </div>
 
+            {/* Modal Footer Actions */}
             <div className="p-4 sm:p-5 border-t border-stone-200 bg-stone-50 flex items-center justify-between gap-3">
               {isOwner ? (
                 <button
@@ -858,6 +963,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
         </div>
       )}
 
+      {/* Upload Modal (Store Owner Only) */}
       {isUploadModalOpen && (
         <div
           role="dialog"
@@ -900,6 +1006,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                 </div>
               )}
 
+              {/* Title */}
               <div>
                 <label className="block font-bold text-stone-800 mb-1">
                   現貨款式標題 *
@@ -914,6 +1021,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                 />
               </div>
 
+              {/* Dimensions Tag & Price */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-semibold text-stone-700 mb-1">
@@ -941,6 +1049,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                 </div>
               </div>
 
+              {/* 1. Overall Main Image */}
               <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="font-bold text-stone-800">
@@ -964,6 +1073,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                 )}
               </div>
 
+              {/* 2. Interior Layout Image */}
               <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="font-bold text-stone-800">
@@ -987,6 +1097,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                 )}
               </div>
 
+              {/* 3. Detail Hardware & Add-ons Image */}
               <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="font-bold text-stone-800">
@@ -1010,6 +1121,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                 )}
               </div>
 
+              {/* Description */}
               <div>
                 <label className="block font-semibold text-stone-700 mb-1">
                   現貨狀態備註說明
@@ -1023,6 +1135,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                 />
               </div>
 
+              {/* Features list */}
               <div>
                 <label className="block font-semibold text-stone-700 mb-1">
                   特色標籤（以逗號分隔）
@@ -1056,6 +1169,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
         </div>
       )}
 
+      {/* Store Owner Auth Modal */}
       <StoreOwnerAuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}

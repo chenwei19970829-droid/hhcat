@@ -20,6 +20,7 @@ import {
   X
 } from 'lucide-react';
 
+// Store Owner Auth Inline Helper for InStockSection
 const AUTH_STORAGE_KEY = 'hhcat_store_owner_auth_v1';
 const VALID_PASSKEYS = ['david19970829'];
 
@@ -59,6 +60,144 @@ const useStoreOwner = () => {
   };
 
   return { isOwner, logout };
+};
+
+interface StoreOwnerAuthModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  actionTitle?: string;
+}
+
+const StoreOwnerAuthModal: React.FC<StoreOwnerAuthModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  actionTitle = '使用上傳照片功能'
+}) => {
+  const [passkey, setPasskey] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passkey.trim()) {
+      setErrorMsg('請輸入店主管理通關密碼');
+      return;
+    }
+
+    if (VALID_PASSKEYS.includes(passkey.trim().toLowerCase())) {
+      try {
+        localStorage.setItem(AUTH_STORAGE_KEY, 'true');
+        window.dispatchEvent(new Event('hhcat_owner_auth_change'));
+      } catch (err) {
+        console.warn(err);
+      }
+      setErrorMsg('');
+      setIsSuccess(true);
+      setTimeout(() => {
+        setIsSuccess(false);
+        setPasskey('');
+        onClose();
+        onSuccess();
+      }, 600);
+    } else {
+      setErrorMsg('密碼不正確！此功能僅限【花花招財貓】店主陳店長本人使用。一般訪客如需諮詢或提供照片客製，請直接加 LINE。');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden">
+        <div className="bg-amber-900 text-white p-5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-amber-800/80 text-amber-200">
+              <Lock className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-serif-title font-bold text-base">店主身分安全驗證</h3>
+              <p className="text-xs text-amber-200/80">花花招財貓 · 後台照片管理專區</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-amber-200 hover:text-white hover:bg-amber-800/60 transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200/80 text-xs text-stone-700 space-y-1.5">
+            <div className="font-bold text-amber-950">
+              <span>僅限店主本人操作：{actionTitle}</span>
+            </div>
+            <p className="text-stone-600 leading-relaxed">
+              為維護官網展示照片品質，上傳照片與相冊管理權限僅開放給店主本人使用。訪客如欲訂製貓別墅或提供參考照片，歡迎直接加入店長官方 LINE 諮詢。
+            </p>
+          </div>
+
+          {errorMsg && (
+            <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-800 flex items-start gap-2">
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {isSuccess ? (
+            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-center space-y-2">
+              <div className="text-sm font-bold text-emerald-900">店主身分驗證成功！</div>
+              <p className="text-xs text-emerald-700">正在開啟管理面板...</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                  店主管理通關密碼：
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={passkey}
+                    onChange={(e) => setPasskey(e.target.value)}
+                    placeholder="請輸入店主專屬管理密碼"
+                    autoFocus
+                    className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-800 focus:border-amber-800 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-600"
+                  >
+                    {showPassword ? '隱藏' : '顯示'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 py-2.5 text-xs font-semibold text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-xl transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-colors"
+                >
+                  確認驗證解鎖
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export interface InStockItem {
@@ -133,6 +272,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
   const [selectedItemForModal, setSelectedItemForModal] = useState<InStockItem | null>(null);
   const [activePhotoTab, setActivePhotoTab] = useState<'main' | 'interior' | 'detail'>('main');
 
+  // Upload Form Modal State
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [formTitle, setFormTitle] = useState('');
   const [formSizeTag, setFormSizeTag] = useState('180-60-90 cm');
@@ -148,8 +288,33 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
   const interiorFileInputRef = useRef<HTMLInputElement>(null);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Subscribe to Firestore for live inventory updates across all devices
   useEffect(() => {
-    // 訂閱 Firebase 雲端資料庫（開放全權限 list 查詢）
+    try {
+      const deletedJson = localStorage.getItem(DELETED_KEY);
+      const deletedIds: string[] = deletedJson ? JSON.parse(deletedJson) : [];
+      const savedJson = localStorage.getItem(STORAGE_KEY);
+      let combined: InStockItem[] = [];
+
+      if (savedJson) {
+        const parsed: InStockItem[] = JSON.parse(savedJson);
+        if (Array.isArray(parsed)) {
+          const customItems = parsed.filter((it) => it.isCustomUpload);
+          const baseFiltered = INITIAL_IN_STOCK_ITEMS.filter((it) => !deletedIds.includes(it.id));
+          const customFiltered = customItems.filter((it) => !deletedIds.includes(it.id));
+          combined = [...customFiltered, ...baseFiltered];
+        } else {
+          combined = INITIAL_IN_STOCK_ITEMS.filter((it) => !deletedIds.includes(it.id));
+        }
+      } else {
+        combined = INITIAL_IN_STOCK_ITEMS.filter((it) => !deletedIds.includes(it.id));
+      }
+      setItems(combined);
+    } catch (err) {
+      console.warn('Failed to load in-stock items from storage', err);
+      setItems(INITIAL_IN_STOCK_ITEMS);
+    }
+
     const unsubscribe = onSnapshot(
       collection(db, 'inStockItems'),
       (snapshot) => {
@@ -212,7 +377,11 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
     }
   };
 
-  const handleOpenUploadModal = () => {
+  const handleOpenUploadModal = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (!isOwner) {
       setAuthActionTitle('上傳門店現貨實拍');
       setIsAuthModalOpen(true);
@@ -234,13 +403,23 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
         `確定要刪除現貨【${item.title}】嗎？\n（當此款現貨已售出或已搬走，可執行刪除）`
       )
     ) {
+      try {
+        const deletedJson = localStorage.getItem(DELETED_KEY);
+        const deletedIds: string[] = deletedJson ? JSON.parse(deletedJson) : [];
+        if (!deletedIds.includes(item.id)) {
+          deletedIds.push(item.id);
+          localStorage.setItem(DELETED_KEY, JSON.stringify(deletedIds));
+        }
+      } catch (err) {
+        console.warn(err);
+      }
+
       const updated = items.filter((it) => it.id !== item.id);
       saveItems(updated);
       if (selectedItemForModal?.id === item.id) {
         setSelectedItemForModal(null);
       }
 
-      // Mark tombstone in Cloud Firestore
       try {
         await setDoc(doc(db, 'inStockItems', item.id), {
           id: item.id,
@@ -250,6 +429,26 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
       } catch (err) {
         handleFirestoreError(err, OperationType.DELETE, `inStockItems/${item.id}`);
       }
+    }
+  };
+
+  const handleFileReader = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: (val: string) => void
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setFormError('請選擇有效圖片檔案（JPG / PNG / WebP）');
+      return;
+    }
+
+    try {
+      setFormError('');
+      const compressed = await compressImage(file, 900, 0.72);
+      setter(compressed);
+    } catch (err) {
+      setFormError('圖片處理失敗，請重試');
     }
   };
 
@@ -274,8 +473,13 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
       mainImage: mainImagePreview,
       interiorImage: interiorImagePreview || undefined,
       detailImage: detailImagePreview || undefined,
-      description: formDescription.trim() || '台中豐原店內現成款式，已組裝完畢，可直接自取搬走。',
-      features: formFeatures.split(/[,，\n]+/).map((f) => f.trim()).filter(Boolean),
+      description:
+        formDescription.trim() ||
+        '台中豐原店內現成款式，已組裝完畢，可直接自取搬走或叫貨車拉走。',
+      features: formFeatures
+        .split(/[,，\n]+/)
+        .map((f) => f.trim())
+        .filter(Boolean),
       isCustomUpload: true,
       dateAdded: '門店最新實拍'
     };
@@ -283,7 +487,6 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
     const updated = [newItem, ...items];
     saveItems(updated);
 
-    // Write to Cloud Firestore for cross-device sync
     try {
       await setDoc(doc(db, 'inStockItems', newId), {
         id: newId,
@@ -335,7 +538,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
             <button
               type="button"
               onClick={handleOpenUploadModal}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-all active:scale-95"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer z-10"
             >
               {isOwner ? (
                 <>
@@ -355,7 +558,8 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
               <button
                 type="button"
                 onClick={logout}
-                className="px-2.5 py-2 text-[11px] text-stone-500 hover:text-stone-800 bg-white hover:bg-stone-100 border border-stone-200 rounded-lg transition-colors"
+                className="px-2.5 py-2 text-[11px] text-stone-500 hover:text-stone-800 bg-white hover:bg-stone-100 border border-stone-200 rounded-lg transition-colors cursor-pointer"
+                title="登出店主管理狀態"
               >
                 鎖定
               </button>
@@ -385,6 +589,27 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
             <p className="text-xs text-stone-500 mt-1 max-w-md mx-auto">
               純實木貓別墅製作費時，門市現成款式數量有限！如需客製訂製或確認下一批現貨到店時間，歡迎直接加 LINE 諮詢。
             </p>
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <a
+                href={STORE_INFO.lineUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#06C755] rounded-xl shadow-xs"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>加 LINE 詢問下一批現貨</span>
+              </a>
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={handleOpenUploadModal}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-amber-900 bg-amber-100 rounded-xl hover:bg-amber-200 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>店主上傳新現貨</span>
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -400,7 +625,13 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 cursor-pointer"
                     onClick={() => {
                       if (onOpenImageZoom) {
-                        onOpenImageZoom(item.title, item.mainImage, item.description);
+                        onOpenImageZoom(
+                          item.title,
+                          item.mainImage,
+                          `${item.sizeTag} · 門市現場實品實拍 · ${item.description}`
+                        );
+                      } else {
+                        setSelectedItemForModal(item);
                       }
                     }}
                   />
@@ -415,11 +646,27 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                     </span>
                   </div>
 
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onOpenImageZoom) {
+                        onOpenImageZoom(item.title, item.mainImage, item.description);
+                      } else {
+                        setSelectedItemForModal(item);
+                      }
+                    }}
+                    className="absolute top-3.5 right-3.5 p-2 bg-stone-900/60 hover:bg-stone-900 text-white rounded-xl backdrop-blur-xs transition-colors"
+                    title="點擊放大查看整體主圖"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                  </button>
+
                   {isOwner && (
                     <button
                       type="button"
                       onClick={(e) => handleDeleteItem(item, e)}
                       className="absolute bottom-3 right-3 z-10 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white text-[11px] font-semibold rounded-lg shadow-md transition-colors flex items-center gap-1"
+                      title="現貨賣出後刪除此卡片"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>現貨賣出/刪除</span>
@@ -430,7 +677,7 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                 <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                   <div>
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-serif-title font-bold text-stone-900 text-base group-hover:text-amber-900 transition-colors">
+                      <h3 className="font-serif-title font-bold text-stone-900 text-base group-hover:text-amber-900 transition-colors leading-snug">
                         {item.title}
                       </h3>
                       {item.priceText && (
@@ -439,23 +686,54 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
                         </span>
                       )}
                     </div>
+
                     <p className="text-xs text-stone-600 mt-2 leading-relaxed">
                       {item.description}
                     </p>
+
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {item.features.map((ft, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 text-[11px] bg-stone-100 text-stone-700 px-2 py-0.5 rounded-md border border-stone-200"
+                        >
+                          <CheckCircle className="w-2.5 h-2.5 text-emerald-600" />
+                          <span>{ft}</span>
+                        </span>
+                      ))}
+                    </div>
                   </div>
 
-                  <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
-                    <span className="text-xs text-stone-500 font-medium">門店現品已組裝 · 豐原自取</span>
-                    <a
-                      href={`${STORE_INFO.lineUrl}?text=${encodeURIComponent(
-                        `您好！我在官網看到門市現貨【${item.title}】，想詢問是否還在庫！`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="py-2 px-3 text-xs font-semibold text-white bg-[#06C755] hover:bg-[#05b34c] rounded-xl"
-                    >
-                      搶訂此款現貨
-                    </a>
+                  <div className="pt-3 border-t border-stone-100 space-y-2.5">
+                    <div className="flex items-center justify-between text-[11px] text-stone-500">
+                      <span className="flex items-center gap-1 text-amber-950 font-medium">
+                        <MapPin className="w-3 h-3 text-amber-800" />
+                        <span>門店現品已組裝 · 豐原自取</span>
+                      </span>
+                      <span className="text-stone-400 font-mono">現貨僅 1 台</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedItemForModal(item)}
+                        className="py-2.5 px-3 text-xs font-semibold text-stone-800 bg-stone-100 hover:bg-stone-200 rounded-xl transition-colors text-center"
+                      >
+                        查看細節多圖
+                      </button>
+
+                      <a
+                        href={`${STORE_INFO.lineUrl}?text=${encodeURIComponent(
+                          `您好！我在官網看到門市現貨【${item.title} (${item.sizeTag})】，想詢問目前豐原店內是否還在庫？我想安排前往自取或叫車拉走！`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="py-2.5 px-3 text-xs font-semibold text-white bg-[#06C755] hover:bg-[#05b34c] rounded-xl shadow-xs transition-colors text-center flex items-center justify-center gap-1"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>搶訂此款現貨</span>
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -463,6 +741,269 @@ export const InStockSection: React.FC<InStockSectionProps> = ({ onOpenImageZoom 
           </div>
         )}
       </div>
+
+      {/* Multi-photo Detail Inspection Modal */}
+      {selectedItemForModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-fadeIn"
+          onClick={() => setSelectedItemForModal(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-stone-200 max-h-[92vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 sm:p-5 border-b border-stone-200 flex items-center justify-between">
+              <div>
+                <div className="text-[11px] font-bold text-amber-800 tracking-wider uppercase">
+                  門市實拍照細節展示
+                </div>
+                <h3 className="font-serif-title font-bold text-stone-900 text-base sm:text-lg">
+                  {selectedItemForModal.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedItemForModal(null)}
+                className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4">
+              <div className="relative aspect-4/3 bg-stone-100 rounded-2xl overflow-hidden border border-stone-200 flex items-center justify-center">
+                <img
+                  src={selectedItemForModal.mainImage}
+                  alt={selectedItemForModal.title}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+
+              <div className="space-y-2 text-xs sm:text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs font-bold px-2 py-0.5 bg-stone-100 rounded">
+                    尺寸：{selectedItemForModal.sizeTag}
+                  </span>
+                  {selectedItemForModal.priceText && (
+                    <span className="text-amber-900 font-bold font-mono text-base">
+                      {selectedItemForModal.priceText}
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-stone-700 leading-relaxed">
+                  {selectedItemForModal.description}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-5 border-t border-stone-200 bg-stone-50 flex items-center justify-between gap-3">
+              {isOwner ? (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteItem(selectedItemForModal)}
+                  className="px-4 py-2.5 text-xs font-semibold text-red-700 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded-xl transition-colors flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>現貨已售出 · 刪除此現貨</span>
+                </button>
+              ) : (
+                <div className="text-[11px] text-stone-500">
+                  門店預約電話：0966-129-569
+                </div>
+              )}
+
+              <a
+                href={`${STORE_INFO.lineUrl}?text=${encodeURIComponent(
+                  `您好！我在網站看到門市現貨【${selectedItemForModal.title} (${selectedItemForModal.sizeTag})】，想預約門店看實品與確認現貨是否還在！`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 py-2.5 px-5 text-xs font-semibold text-white bg-[#06C755] hover:bg-[#05b34c] rounded-xl shadow-xs transition-colors ml-auto"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>加 LINE 詢問 / 搶訂現貨</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Modal (Store Owner Only) */}
+      {isUploadModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn"
+          onClick={() => setIsUploadModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-stone-200 overflow-y-auto max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-900 flex items-center justify-center">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-serif-title font-bold text-stone-900 text-base">
+                    上傳台中豐原門店現貨實拍
+                  </h4>
+                  <p className="text-[11px] text-stone-500">
+                    可上傳整體主圖、內飾圖與加裝詳細圖，賣出後可隨時刪除
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsUploadModalOpen(false)}
+                className="text-stone-400 hover:text-stone-600 text-sm font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleUploadSubmit} className="space-y-3.5 text-xs">
+              {formError && (
+                <div className="p-2.5 bg-red-50 text-red-700 rounded-lg text-xs flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold text-stone-800 mb-1">
+                  現貨款式標題 *
+                </label>
+                <input
+                  type="text"
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                  placeholder="例如：門市實品 · 180-60-90 旗艦雙層款現貨"
+                  required
+                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-amber-900/20"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-stone-700 mb-1">
+                    尺寸標記 (如: 180-60-90 cm)
+                  </label>
+                  <input
+                    type="text"
+                    value={formSizeTag}
+                    onChange={(e) => setFormSizeTag(e.target.value)}
+                    placeholder="180-60-90 cm"
+                    className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-stone-700 mb-1">
+                    現貨價格 (如: NT$ 21,900)
+                  </label>
+                  <input
+                    type="text"
+                    value={formPriceText}
+                    onChange={(e) => setFormPriceText(e.target.value)}
+                    placeholder="NT$ 21,900"
+                    className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">
+                  門店現貨整體主圖 * (JPG / PNG)
+                </label>
+                <input
+                  type="file"
+                  ref={mainFileInputRef}
+                  accept="image/*"
+                  onChange={(e) => handleFileReader(e, setMainImagePreview)}
+                  className="hidden"
+                />
+                {mainImagePreview ? (
+                  <div className="relative aspect-16/9 rounded-xl overflow-hidden bg-stone-100 border border-stone-300 flex items-center justify-center">
+                    <img src={mainImagePreview} alt="主圖預覽" className="w-full h-full object-contain" />
+                    <button
+                      type="button"
+                      onClick={() => mainFileInputRef.current?.click()}
+                      className="absolute bottom-2 right-2 px-2.5 py-1 bg-stone-900/80 text-white rounded text-[11px]"
+                    >
+                      更換圖片
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => mainFileInputRef.current?.click()}
+                    className="border-2 border-dashed border-stone-300 hover:border-amber-700 bg-stone-50 rounded-xl p-4 text-center cursor-pointer"
+                  >
+                    <Camera className="w-6 h-6 text-stone-400 mx-auto mb-1" />
+                    <p className="font-semibold text-stone-700">點擊上傳門店現貨主圖照片</p>
+                    <p className="text-[10px] text-stone-400 mt-0.5">系統自動秒速壓縮照片，手機上傳順暢</p>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">
+                  現貨說明與狀況
+                </label>
+                <textarea
+                  rows={2}
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  placeholder="例如：門市展示樣品99成新已組裝完成，附通天柱與造型護欄，可現場確認滿意後搬走！"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-amber-900/20"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">
+                  特色標籤（以逗號分隔）
+                </label>
+                <input
+                  type="text"
+                  value={formFeatures}
+                  onChange={(e) => setFormFeatures(e.target.value)}
+                  placeholder="純實木厚度1.5cm, 高透安全壓克力門, 附通天抓柱"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-stone-100">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 px-4 bg-amber-900 hover:bg-amber-800 text-white font-semibold rounded-xl transition-colors shadow-xs cursor-pointer"
+                >
+                  發佈門店現貨
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsUploadModalOpen(false)}
+                  className="py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold rounded-xl transition-colors cursor-pointer"
+                >
+                  取消
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Store Owner Auth Modal */}
+      <StoreOwnerAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={() => {
+          setIsUploadModalOpen(true);
+        }}
+        actionTitle={authActionTitle}
+      />
     </section>
   );
 };

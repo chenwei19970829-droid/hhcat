@@ -240,44 +240,48 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       setPhotos(INITIAL_SHOWCASE_PHOTOS);
     }
 
-    // Subscribe to Firestore for live showcase photo sync
+    // Subscribe to Firestore real-time photo updates
     const unsubscribe = onSnapshot(
       collection(db, 'showcasePhotos'),
       (snapshot) => {
-        if (!snapshot.empty) {
-          const remotePhotos: ShowcasePhoto[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            if (data.fullPhotoData) {
-              try {
-                remotePhotos.push(JSON.parse(data.fullPhotoData));
-              } catch (e) {
-                console.warn(e);
-              }
-            } else if (data.id && data.title && data.imageUrl) {
-              remotePhotos.push({
-                id: data.id,
-                title: data.title,
-                sizeCategory: (data.dimensions?.split('-')[0] as any) || '150',
-                dimensionsText: data.dimensions || '150-60-120',
-                imageUrl: data.imageUrl,
-                customerNote: data.description || '店主精選客製實品照',
-                date: '剛剛新增',
-                tags: data.tags || ['客製實品'],
-                isCustomUpload: true
-              });
-            }
-          });
+        const deletedIdsFromCloud = new Set<string>();
+        const remotePhotos: ShowcasePhoto[] = [];
 
-          if (remotePhotos.length > 0) {
-            setPhotos((prev) => {
-              const remainingDefaults = INITIAL_SHOWCASE_PHOTOS.filter(
-                (orig) => !remotePhotos.some((r) => r.id === orig.id)
-              );
-              return [...remotePhotos, ...remainingDefaults];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data.deleted === true) {
+            deletedIdsFromCloud.add(data.id || docSnap.id);
+          } else if (data.fullPhotoData) {
+            try {
+              const photo = JSON.parse(data.fullPhotoData);
+              if (photo && photo.id) {
+                remotePhotos.push(photo);
+              }
+            } catch (e) {
+              console.warn('JSON parse error:', e);
+            }
+          } else if (data.id && data.title && data.imageUrl) {
+            remotePhotos.push({
+              id: data.id,
+              title: data.title,
+              sizeCategory: (data.dimensions?.split('-')[0] as any) || '150',
+              dimensionsText: data.dimensions || '150-60-120',
+              imageUrl: data.imageUrl,
+              customerNote: data.description || '店主精選客製實品照',
+              date: '剛剛新增',
+              tags: data.tags || ['客製實品'],
+              isCustomUpload: true
             });
           }
-        }
+        });
+
+        setPhotos(() => {
+          const activeDefaults = INITIAL_SHOWCASE_PHOTOS.filter(
+            (orig) => !deletedIdsFromCloud.has(orig.id) && !remotePhotos.some((r) => r.id === orig.id)
+          );
+          const activeRemotes = remotePhotos.filter((r) => !deletedIdsFromCloud.has(r.id));
+          return [...activeRemotes, ...activeDefaults];
+        });
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, 'showcasePhotos');
@@ -298,7 +302,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
 
     try {
       setUploadError(null);
-      const compressed = await compressImage(file, 1200, 0.82);
+      const compressed = await compressImage(file, 900, 0.72);
       setPreviewImage(compressed);
     } catch (err) {
       setUploadError('圖片處理失敗，請換一張再試');
@@ -340,7 +344,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       console.warn('LocalStorage limit reached or disabled:', err);
     }
 
-    // Save to Cloud Firestore
+    // Save to Cloud Firestore for cross-device real-time sync
     try {
       await setDoc(doc(db, 'showcasePhotos', newId), {
         id: newId,
@@ -366,7 +370,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
     setPreviewImage(null);
     setUploadTitle('');
     setUploadCustomerNote('');
-    setSelectedSize(uploadSizeCategory); // Auto jump to the uploaded category!
+    setSelectedSize(uploadSizeCategory);
   };
 
   const handleOpenUpload = (targetSize?: '60' | '90' | '120' | '150' | '180' | 'custom') => {
@@ -412,9 +416,13 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       console.error(err);
     }
 
-    // Delete from Cloud Firestore
+    // Mark as tombstone deleted in Cloud Firestore for cross-device real-time sync
     try {
-      await deleteDoc(doc(db, 'showcasePhotos', photo.id));
+      await setDoc(doc(db, 'showcasePhotos', photo.id), {
+        id: photo.id,
+        deleted: true,
+        updatedAt: new Date().toISOString()
+      });
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `showcasePhotos/${photo.id}`);
     }
@@ -527,7 +535,6 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
             );
           })}
 
-          {/* New Custom Size Category */}
           <button
             type="button"
             onClick={() => {
@@ -750,7 +757,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
                         點擊選擇照片 或 拖曳檔案至此
                       </p>
                       <p className="text-[11px] text-stone-400 mt-1">
-                        支援 JPG、PNG、WEBP，大小建議 8MB 內
+                        支援 JPG、PNG、WEBP，系統將自動秒速微縮壓縮上傳
                       </p>
                     </div>
                   )}

@@ -14,8 +14,12 @@ export const Footer: React.FC = () => {
           {/* Brand info */}
           <div className="lg:col-span-5 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-700/20 text-amber-400 border border-amber-600/30 flex items-center justify-center font-serif-title font-bold text-lg">
-                花
+              <div className="w-12 h-12 rounded-xl bg-white p-0.5 border border-amber-600/30 overflow-hidden flex items-center justify-center shrink-0">
+                <img
+                  src={STORE_INFO.logoImage || '/assets/aistudio/logo_6994c231.jpg'}
+                  alt={STORE_INFO.name}
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div>
                 <span className="font-serif-title text-xl font-bold text-white tracking-tight">
@@ -28,7 +32,7 @@ export const Footer: React.FC = () => {
             </div>
 
             <p className="text-xs text-stone-400 leading-relaxed max-w-sm">
-              堅持採用天然松木無甲醛板材，純實木板厚度足足 1.5cm，表面塗刷些許環保防水漆保護木質防潮，搭配高透耐磨安全亞克力門片。工廠在大陸專注客製生產，出貨前預組裝拍照確認無誤，直寄台灣享免運費（免運不包含偏遠地區還有離島），由新竹物流配送至一樓。
+              堅持採用天然松木無甲醛板材，純實木板厚度足足 1.5cm，表面塗刷些許環保防水漆保護木質防潮，搭配高透耐磨安全壓克力門片。工廠在大陸專注客製生產，出貨前預組裝拍照確認無誤，直寄台灣享免運費（免運不包含偏遠地區還有離島），由新竹物流配送至一樓。
             </p>
 
             <div className="pt-2 text-xs text-stone-400 space-y-1.5">
@@ -114,7 +118,7 @@ export const Footer: React.FC = () => {
               </li>
               <li>
                 <a href="#materials" className="hover:text-amber-400 transition-colors">
-                  純實木1.5cm與亞克力特色
+                  純實木1.5cm與壓克力特色
                 </a>
               </li>
               <li>

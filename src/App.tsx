@@ -95,66 +95,66 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-stone-800 font-sans selection:bg-amber-100 selection:text-amber-900">
-      {/* Top Navigation */}
+      {/* Top Bar following 3-zone contract */}
       <Navbar onOpenEstimator={() => scrollToEstimator()} />
 
       {/* Main Single-page Layout Sections */}
       <main className="flex-1">
-        {/* 1. Hero Section */}
+        {/* 1. Hero Section: Slogan, 4 Guarantees, Big Visual Showcase */}
         <HeroSection
           onOpenEstimator={() => scrollToEstimator()}
           onViewMenuImages={() => handleOpenOriginalMenu(0)}
           onOpenImageZoom={handleOpenImageZoom}
         />
 
-        {/* 2. In-Stock Showcase: 門店現貨實拍區（台中豐原店內現成款式、店主密碼上傳與售出刪除卡片） */}
+        {/* 2. Brand Story & Muse Hua Hua: 創始初心、親手剪臍帶接生、1.5cm板材、成長相冊與上傳照片 */}
+        <BrandStorySection onOpenImageZoom={handleOpenImageZoom} />
+
+        {/* 3. In-Stock Showcase: 門店現貨實拍區（台中豐原店內現成款式、支援店主上傳與售出刪除、現貨自取自理） */}
         <InStockSection onOpenImageZoom={handleOpenImageZoom} />
 
-        {/* 3. Featured Cat Villa Models */}
+        {/* 4. Featured Cat Villa Models: A-Z 款式, filtering by All/90/120/150/180 */}
         <FeaturedModels
           onSelectForQuote={handleSelectModelForQuote}
           onOpenImageZoom={handleOpenImageZoom}
         />
 
-        {/* 4. Brand Story & Muse Hua Hua */}
-        <BrandStorySection onOpenImageZoom={handleOpenImageZoom} />
-
-        {/* 5. Customer Custom Showcase & Gallery */}
+        {/* 5. Customer Custom Showcase & Store Owner Upload Gallery (依尺寸檢索實品照) */}
         <ShowcaseGallery onOpenImageZoom={handleOpenImageZoom} />
 
-        {/* 6. Complete Menu Pricing Tables */}
+        {/* 6. Complete Menu Pricing Tables & Original Paper Menu Viewer */}
         <PriceCatalog
           onOpenOriginalMenuModal={handleOpenOriginalMenu}
           onSelectDimensionForEstimator={(len, h) => scrollToEstimator(len, h)}
         />
 
-        {/* 7. Online Interactive Custom Quoting Estimator */}
+        {/* 7. Online Interactive Custom Quoting Estimator (帶入尺寸、加裝配件、LINE一鍵諮詢) */}
         <EstimatorCalculator
           initialLength={estimatorDimensions.length}
           initialHeight={estimatorDimensions.height}
           onOpenImageZoom={handleOpenImageZoom}
         />
 
-        {/* 8. Order Disclaimers & Warranty Notice */}
+        {/* 8. Order Disclaimers & Warranty Notice (出貨預組裝拍照、工具提醒、物流送一樓、1年保固全程錄影) */}
         <DisclaimerNotice />
 
-        {/* 9. Materials & Craftsmanship */}
+        {/* 9. Materials & Craftsmanship (天然松木無甲醛、高透安全壓克力、靜音五金、對流通風) */}
         <MaterialsFeatures />
 
-        {/* 10. Frequently Asked Questions */}
+        {/* 10. Frequently Asked Questions (常見問題與訂購流程) */}
         <FaqSection />
 
-        {/* 11. Contact & Ordering Section */}
+        {/* 11. Contact & Ordering Section: LINE, Phone, Store Address Cards with Direct Click */}
         <ContactSection />
       </main>
 
-      {/* Footer */}
+      {/* Footer with Business Info & Back-to-Top */}
       <Footer />
 
-      {/* Mobile Bottom Sticky Bar */}
+      {/* Mobile Bottom Sticky Bar (Phone / LINE / Estimator) */}
       <MobileStickyBar onOpenEstimator={() => scrollToEstimator()} />
 
-      {/* Lightbox Modal */}
+      {/* Lightbox Modal for Full Image Zoom */}
       <LightboxModal
         isOpen={lightbox.isOpen}
         title={lightbox.title}
@@ -163,7 +163,7 @@ export default function App() {
         onClose={handleCloseLightbox}
       />
 
-      {/* Original Paper Menu Viewer */}
+      {/* Original Paper Menu Viewer (User's 5 authentic attachments) */}
       <OriginalMenuModal
         isOpen={originalMenuModal.isOpen}
         initialIndex={originalMenuModal.initialIndex}

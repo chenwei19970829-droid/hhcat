@@ -39,10 +39,14 @@ export const Navbar: React.FC<NavbarProps> = () => {
     <header className="sticky top-0 z-40 bg-[#FAF8F5]/90 backdrop-blur-md border-b border-stone-200/80 transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20 gap-8">
-          {/* Zone 1: Brand Wordmark */}
+          {/* Zone 1: Brand Wordmark with Logo */}
           <a href="#" className="flex items-center gap-3 shrink-0 group">
-            <div className="w-10 h-10 rounded-xl bg-amber-800/10 flex items-center justify-center text-amber-900 border border-amber-900/15 group-hover:bg-amber-800/15 transition-colors">
-              <span className="font-serif-title font-bold text-lg">花</span>
+            <div className="w-12 h-12 rounded-xl bg-white p-0.5 border border-stone-200/90 shadow-sm group-hover:border-amber-700 transition-colors overflow-hidden flex items-center justify-center shrink-0">
+              <img
+                src={STORE_INFO.logoImage || '/assets/aistudio/logo_6994c231.jpg'}
+                alt={STORE_INFO.name}
+                className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-300"
+              />
             </div>
             <div className="flex flex-col">
               <span className="font-serif-title text-xl font-bold tracking-tight text-stone-900 leading-none">

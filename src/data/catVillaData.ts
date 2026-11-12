@@ -73,6 +73,7 @@ export interface TravelFeeRegion {
 
 export const STORE_INFO = {
   name: '花花招財貓',
+  logoImage: '/assets/aistudio/logo_6994c231.jpg',
   englishName: 'Hua Hua Lucky Cat Custom Wooden Cat Villas',
   tagline: '天然松木無甲醛 · 實木厚度足1.5cm · 手工全套客製 · 新竹物流直送',
   address: '臺中市豐原區圓環西路97號',

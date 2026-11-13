@@ -1,9 +1,9 @@
 /**
  * 手機拍照與電腦上傳自動壓縮工具
- * 自動微縮長寬至 1200px 內，壓縮為約 100KB JPEG 高品質圖檔
- * 確保手機 4G/5G 隨拍即傳、無延遲即時同步
+ * 自動微縮長寬至 900px 內，壓縮為約 40~80KB 高畫質 JPEG 圖檔
+ * 確保手機 4G/5G 秒速上傳、跨設備 1 秒即時雲端同步
  */
-export async function compressImage(file: File, maxDimension = 1200, quality = 0.82): Promise<string> {
+export async function compressImage(file: File, maxDimension = 900, quality = 0.72): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('讀取圖片檔案失敗'));

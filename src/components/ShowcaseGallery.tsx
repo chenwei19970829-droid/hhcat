@@ -1,198 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ShowcasePhoto, INITIAL_SHOWCASE_PHOTOS, STORE_INFO } from '../data/catVillaData';
+import { MultiPhotoLightbox } from './MultiPhotoLightbox';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
-import { Upload, Plus, Filter, Maximize2, Trash2, CheckCircle, Image as ImageIcon, MessageCircle, AlertCircle, Lock, ChevronDown, ChevronUp } from 'lucide-react';
-
-// Store Owner Auth Inline Helper for ShowcaseGallery
-const AUTH_STORAGE_KEY = 'hhcat_store_owner_auth_v1';
-const VALID_PASSKEYS = ['david19970829'];
-
-const isStoreOwnerLoggedIn = (): boolean => {
-  try {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem(AUTH_STORAGE_KEY) === 'true';
-  } catch {
-    return false;
-  }
-};
-
-const useStoreOwner = () => {
-  const [isOwner, setIsOwner] = useState<boolean>(() => isStoreOwnerLoggedIn());
-
-  useEffect(() => {
-    const handleUpdate = () => {
-      setIsOwner(isStoreOwnerLoggedIn());
-    };
-
-    window.addEventListener('hhcat_owner_auth_change', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
-
-    return () => {
-      window.removeEventListener('hhcat_owner_auth_change', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
-    };
-  }, []);
-
-  const logout = () => {
-    try {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      window.dispatchEvent(new Event('hhcat_owner_auth_change'));
-    } catch (e) {
-      console.warn(e);
-    }
-  };
-
-  return { isOwner, logout };
-};
-
-interface StoreOwnerAuthModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
-  actionTitle?: string;
-}
-
-const StoreOwnerAuthModal: React.FC<StoreOwnerAuthModalProps> = ({
-  isOpen,
-  onClose,
-  onSuccess,
-  actionTitle = '使用上傳照片功能'
-}) => {
-  const [passkey, setPasskey] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [isSuccess, setIsSuccess] = useState(false);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!passkey.trim()) {
-      setErrorMsg('請輸入店主管理通關密碼');
-      return;
-    }
-
-    if (VALID_PASSKEYS.includes(passkey.trim().toLowerCase())) {
-      try {
-        localStorage.setItem(AUTH_STORAGE_KEY, 'true');
-        window.dispatchEvent(new Event('hhcat_owner_auth_change'));
-      } catch (err) {
-        console.warn(err);
-      }
-      setErrorMsg('');
-      setIsSuccess(true);
-      setTimeout(() => {
-        setIsSuccess(false);
-        setPasskey('');
-        onClose();
-        onSuccess();
-      }, 700);
-    } else {
-      setErrorMsg('密碼不正確！此功能僅限【花花招財貓】店主陳店長本人使用。一般訪客如需諮詢或提供照片客製，請直接加 LINE。');
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden">
-        <div className="bg-amber-900 text-white p-5 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-800/80 text-amber-200">
-              <Lock className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-serif-title font-bold text-base">店主身分安全驗證</h3>
-              <p className="text-xs text-amber-200/80">花花招財貓 · 後台照片管理專區</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-amber-200 hover:text-white hover:bg-amber-800/60 transition-colors"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200/80 text-xs text-stone-700 space-y-1.5">
-            <div className="font-bold text-amber-950">
-              <span>僅限店主本人操作：{actionTitle}</span>
-            </div>
-            <p className="text-stone-600 leading-relaxed">
-              為維護官網展示照片品質，上傳照片與相冊管理權限僅開放給店主本人使用。訪客如欲訂製貓別墅或提供參考照片，歡迎直接加入店長官方 LINE 諮詢。
-            </p>
-          </div>
-
-          {errorMsg && (
-            <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-800 flex items-start gap-2">
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
-          {isSuccess ? (
-            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-center space-y-2">
-              <div className="text-sm font-bold text-emerald-900">店主身分驗證成功！</div>
-              <p className="text-xs text-emerald-700">正在開啟管理面板...</p>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  店主管理通關密碼：
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={passkey}
-                    onChange={(e) => setPasskey(e.target.value)}
-                    placeholder="請輸入店主專屬管理密碼"
-                    autoFocus
-                    className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-800 focus:border-amber-800 pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-600"
-                  >
-                    {showPassword ? '隱藏' : '顯示'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex-1 py-2.5 text-xs font-semibold text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-xl transition-colors"
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-colors"
-                >
-                  確認驗證解鎖
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+import { useStoreOwner } from '../utils/adminAuth';
+import { StoreOwnerAuthModal } from './StoreOwnerAuthModal';
+import { Upload, Plus, Filter, Maximize2, Trash2, Edit3, CheckCircle, Image as ImageIcon, AlertCircle, Lock, ChevronDown, ChevronUp, Images } from 'lucide-react';
 
 interface ShowcaseGalleryProps {
-  onOpenImageZoom: (title: string, imageUrl: string, subtitle?: string) => void;
+  onOpenImageZoom?: (title: string, imageUrl: string, subtitle?: string) => void;
 }
 
 const STORAGE_KEY = 'huahua_custom_showcase_photos_v2';
 const DELETED_SHOWCASE_KEY = 'hhcat_deleted_showcase_ids_v1';
 
-export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoom }) => {
+export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
   const { isOwner, logout } = useStoreOwner();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authActionTitle, setAuthActionTitle] = useState('店主管理操作');
@@ -206,15 +29,29 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
     setCurrentPage(1);
   }, [selectedSize, showAllPhotos]);
 
-  // Upload Form State
+  // Upload & Edit Form State
+  const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadSizeCategory, setUploadSizeCategory] = useState<'60' | '90' | '120' | '150' | '180' | 'custom'>('120');
   const [uploadDimensions, setUploadDimensions] = useState('150-60-120');
   const [uploadCustomerNote, setUploadCustomerNote] = useState('');
   const [uploadTags, setUploadTags] = useState('客製實品, 實木貓屋');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [uploadImages, setUploadImages] = useState<string[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [lightboxTitle, setLightboxTitle] = useState('');
+  const [lightboxSubtitle, setLightboxSubtitle] = useState('');
+
+  const openLightbox = (title: string, images: string[], subtitle?: string) => {
+    setLightboxTitle(title);
+    setLightboxImages(images.filter(Boolean));
+    setLightboxSubtitle(subtitle || '');
+    setLightboxOpen(true);
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -250,38 +87,47 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       collection(db, 'showcasePhotos'),
       (snapshot) => {
         if (!snapshot.empty) {
+          const deletedFromCloud = new Set<string>();
           const remotePhotos: ShowcasePhoto[] = [];
           snapshot.forEach((docSnap) => {
             const data = docSnap.data();
-            if (data.fullPhotoData) {
+            if (data.deleted === true) {
+              deletedFromCloud.add(data.id || docSnap.id);
+            } else if (data.fullPhotoData) {
               try {
                 remotePhotos.push(JSON.parse(data.fullPhotoData));
               } catch (e) {
                 console.warn(e);
               }
             } else if (data.id && data.title && data.imageUrl) {
+              const fallbackImgs = Array.isArray(data.images) && data.images.length > 0 ? data.images : [data.imageUrl];
               remotePhotos.push({
                 id: data.id,
                 title: data.title,
-                sizeCategory: (data.dimensions?.split('-')[0] as any) || '150',
+                sizeCategory: (data.sizeCategory as ShowcasePhoto['sizeCategory']) || (data.dimensions?.split('-')[0] as ShowcasePhoto['sizeCategory']) || '150',
                 dimensionsText: data.dimensions || '150-60-120',
-                imageUrl: data.imageUrl,
+                imageUrl: fallbackImgs[0] || data.imageUrl,
+                images: fallbackImgs,
                 customerNote: data.description || '店主精選客製實品照',
-                date: '剛剛新增',
+                date: data.date || '客製實品照',
                 tags: data.tags || ['客製實品'],
                 isCustomUpload: true
               });
             }
           });
 
-          if (remotePhotos.length > 0) {
-            setPhotos((prev) => {
-              const remainingDefaults = INITIAL_SHOWCASE_PHOTOS.filter(
-                (orig) => !remotePhotos.some((r) => r.id === orig.id)
-              );
-              return [...remotePhotos, ...remainingDefaults];
-            });
-          }
+          let deletedIds: string[] = [];
+          try {
+            const deletedJson = localStorage.getItem(DELETED_SHOWCASE_KEY);
+            deletedIds = deletedJson ? JSON.parse(deletedJson) : [];
+          } catch {}
+          setPhotos(() => {
+            const remainingDefaults = INITIAL_SHOWCASE_PHOTOS.filter(
+              (orig) => !remotePhotos.some((r) => r.id === orig.id) && !deletedFromCloud.has(orig.id)
+            );
+            const activeRemotes = remotePhotos.filter((r) => !deletedFromCloud.has(r.id));
+            return [...activeRemotes, ...remainingDefaults].filter((p) => !deletedIds.includes(p.id));
+          });
         }
       },
       (error) => {
@@ -292,28 +138,47 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
     return () => unsubscribe();
   }, []);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      setUploadError('請上傳有效的圖片檔案（JPG、PNG、WEBP 等）');
-      return;
-    }
+  const handleMultipleFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     try {
       setUploadError(null);
-      const compressed = await compressImage(file, 1200, 0.82);
-      setPreviewImage(compressed);
-    } catch (err) {
-      setUploadError('圖片處理失敗，請換一張再試');
+      const compressedList: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.type.startsWith('image/')) {
+          const compressed = await compressImage(file, 960, 0.74);
+          compressedList.push(compressed);
+        }
+      }
+      if (compressedList.length > 0) {
+        const updated = [...uploadImages, ...compressedList];
+        setUploadImages(updated);
+        setPreviewImage(updated[0]);
+      }
+    } catch {
+      setUploadError('多張照片處理失敗，請換一張再試');
+    } finally {
+      e.target.value = '';
     }
+  };
+
+  const resetUploadForm = () => {
+    setEditingPhotoId(null);
+    setUploadTitle('');
+    setUploadCustomerNote('');
+    setUploadTags('客製實品, 實木貓屋');
+    setPreviewImage(null);
+    setUploadImages([]);
+    setUploadError(null);
   };
 
   const handleSavePhoto = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!previewImage) {
-      setUploadError('請先選擇要上傳的貓別墅實品照片！');
+    const finalImages = uploadImages.length > 0 ? uploadImages : (previewImage ? [previewImage] : []);
+    if (finalImages.length === 0) {
+      setUploadError('請至少上傳一張貓別墅實品照片！');
       return;
     }
 
@@ -324,20 +189,25 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
 
     setIsUploading(true);
 
-    const newId = `custom-${Date.now()}`;
+    const targetId = editingPhotoId || `custom-${Date.now()}`;
     const newPhoto: ShowcasePhoto = {
-      id: newId,
+      id: targetId,
       title: uploadTitle.trim(),
       sizeCategory: uploadSizeCategory,
       dimensionsText: uploadDimensions.trim() || `${uploadSizeCategory}cm 系列`,
-      imageUrl: previewImage,
+      imageUrl: finalImages[0],
+      images: finalImages,
       customerNote: uploadCustomerNote.trim() || '店主精選客製實品照，支援同款專屬訂製。',
-      date: '剛剛新增',
+      date: editingPhotoId ? '已更新實拍' : '剛剛新增',
       tags: uploadTags.split(/[,， ]+/).filter(Boolean),
       isCustomUpload: true
     };
 
-    const updated = [newPhoto, ...photos];
+    const existingIdx = photos.findIndex((p) => p.id === targetId);
+    const updated =
+      existingIdx >= 0
+        ? photos.map((p) => (p.id === targetId ? newPhoto : p))
+        : [newPhoto, ...photos];
     setPhotos(updated);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
@@ -345,36 +215,33 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       console.warn('LocalStorage limit reached or disabled:', err);
     }
 
-    // Save to Cloud Firestore
     try {
-      await setDoc(doc(db, 'showcasePhotos', newId), {
-        id: newId,
+      await setDoc(doc(db, 'showcasePhotos', targetId), {
+        id: targetId,
         title: newPhoto.title,
-        client: '台中店主實品',
-        location: '臺中豐原門店',
+        sizeCategory: newPhoto.sizeCategory,
         dimensions: newPhoto.dimensionsText,
         description: newPhoto.customerNote,
         imageUrl: newPhoto.imageUrl,
+        images: newPhoto.images || [],
         tags: newPhoto.tags,
-        likes: 12,
+        date: newPhoto.date,
         isCustomUpload: true,
-        fullPhotoData: JSON.stringify(newPhoto),
-        createdAt: new Date().toISOString()
+        deleted: false,
+        updatedAt: new Date().toISOString()
       });
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `showcasePhotos/${newId}`);
+      handleFirestoreError(err, OperationType.CREATE, `showcasePhotos/${targetId}`);
     }
 
-    // Reset Form
     setIsUploading(false);
     setIsUploadModalOpen(false);
-    setPreviewImage(null);
-    setUploadTitle('');
-    setUploadCustomerNote('');
-    setSelectedSize(uploadSizeCategory); // Auto jump to the uploaded category!
+    resetUploadForm();
+    setSelectedSize(uploadSizeCategory);
   };
 
   const handleOpenUpload = (targetSize?: '60' | '90' | '120' | '150' | '180' | 'custom') => {
+    resetUploadForm();
     if (targetSize) {
       setUploadSizeCategory(targetSize);
       if (targetSize === 'custom') {
@@ -387,6 +254,26 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       setAuthActionTitle('上傳客製實體貓別墅照片');
       setIsAuthModalOpen(true);
     }
+  };
+
+  const handleOpenEdit = (photo: ShowcasePhoto, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isOwner) {
+      setAuthActionTitle('編輯客製相冊卡片');
+      setIsAuthModalOpen(true);
+      return;
+    }
+    setEditingPhotoId(photo.id);
+    setUploadTitle(photo.title);
+    setUploadSizeCategory(photo.sizeCategory);
+    setUploadDimensions(photo.dimensionsText);
+    setUploadCustomerNote(photo.customerNote);
+    setUploadTags((photo.tags || []).join(', '));
+    const imgs = photo.images && photo.images.length > 0 ? photo.images : [photo.imageUrl];
+    setUploadImages(imgs);
+    setPreviewImage(imgs[0]);
+    setUploadError(null);
+    setIsUploadModalOpen(true);
   };
 
   const handleDeletePhoto = async (photo: ShowcasePhoto, e: React.MouseEvent) => {
@@ -417,9 +304,13 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
       console.error(err);
     }
 
-    // Delete from Cloud Firestore
+    // Mark deleted in Cloud Firestore so both default & custom photos stay deleted across devices
     try {
-      await deleteDoc(doc(db, 'showcasePhotos', photo.id));
+      await setDoc(doc(db, 'showcasePhotos', photo.id), {
+        id: photo.id,
+        deleted: true,
+        updatedAt: new Date().toISOString()
+      });
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `showcasePhotos/${photo.id}`);
     }
@@ -484,7 +375,6 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
             >
               {isOwner ? (
                 <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   <Plus className="w-4 h-4" />
                   <span>店主上傳客製實品照</span>
                 </>
@@ -594,16 +484,20 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-            {displayedPhotos.map((photo) => (
+            {displayedPhotos.map((photo) => {
+              const imgs = photo.images && photo.images.length > 0 ? photo.images : [photo.imageUrl];
+              return (
               <div
                 key={photo.id}
-                onClick={() => onOpenImageZoom(photo.title, photo.imageUrl, photo.customerNote)}
+                onClick={() => {
+                  openLightbox(photo.title, imgs, `${photo.dimensionsText} · ${photo.customerNote}`);
+                }}
                 className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-md hover:border-amber-800/40 transition-all cursor-pointer group flex flex-col"
               >
                 {/* Image Container */}
                 <div className="relative aspect-4/3 bg-stone-100 overflow-hidden flex items-center justify-center p-2">
                   <img
-                    src={photo.imageUrl}
+                    src={imgs[0] || photo.imageUrl}
                     alt={photo.title}
                     className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
@@ -614,30 +508,42 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
 
                   {/* Size Pill */}
                   <div className="absolute top-3 left-3 bg-stone-900/80 backdrop-blur-xs text-white text-[11px] font-mono px-2 py-0.5 rounded">
-                    {photo.sizeCategory === 'custom' ? '✨ 客製化特殊尺寸' : `長度 ${photo.sizeCategory}cm 系列`}
+                    {photo.sizeCategory === 'custom' ? '客製化特殊尺寸' : `長度 ${photo.sizeCategory}cm 系列`}
                   </div>
 
-                  {/* Zoom Icon */}
-                  <div className="absolute top-3 right-3 p-1.5 bg-white/90 rounded-md text-stone-700 shadow-xs group-hover:bg-amber-900 group-hover:text-white transition-colors">
-                    <Maximize2 className="w-3.5 h-3.5" />
+                  {/* Top Right Photo Count + Zoom Icon */}
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                    {imgs.length > 1 && (
+                      <span className="px-2 py-0.5 bg-stone-900/75 text-white text-[11px] font-semibold rounded backdrop-blur-xs flex items-center gap-1">
+                        <Images className="w-3 h-3 text-amber-300" />
+                        <span>{imgs.length} 張</span>
+                      </span>
+                    )}
+                    <div className="p-1.5 bg-white/90 rounded-md text-stone-700 shadow-xs group-hover:bg-amber-900 group-hover:text-white transition-colors">
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    </div>
                   </div>
 
-                  {/* Custom Upload Badge & Delete Option for Store Owner */}
+                  {/* Store Owner Edit & Delete Options */}
                   {isOwner && (
-                    <div className="absolute bottom-3 left-3 flex items-center gap-2">
-                      {photo.isCustomUpload && (
-                        <span className="bg-amber-800 text-white text-[10px] px-2 py-0.5 rounded font-medium">
-                          店主新增
-                        </span>
-                      )}
+                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenEdit(photo, e)}
+                        className="bg-amber-900/95 hover:bg-amber-900 text-white px-2.5 py-1 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-xs"
+                        title="編輯與新增多張照片"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>編輯/加圖</span>
+                      </button>
                       <button
                         type="button"
                         onClick={(e) => handleDeletePhoto(photo, e)}
-                        className="bg-red-600/90 hover:bg-red-700 text-white px-2 py-1 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-xs"
+                        className="bg-red-600/95 hover:bg-red-700 text-white px-2.5 py-1 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-xs"
                         title="刪除此相片卡片"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>刪除卡片</span>
+                        <Trash2 className="w-3 h-3" />
+                        <span>刪除</span>
                       </button>
                     </div>
                   )}
@@ -658,22 +564,15 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
                     <span className="font-mono text-stone-600 font-medium">
                       {photo.dimensionsText}
                     </span>
-                    <a
-                      href={`${STORE_INFO.lineUrl}?text=${encodeURIComponent(
-                        `您好！我在相冊看到這款【${photo.title} (${photo.dimensionsText})】，想詢問客製相同規格報價！`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-700 font-semibold"
-                    >
-                      <MessageCircle className="w-3 h-3" />
-                      <span>洽詢此實例</span>
-                    </a>
+                    <span className="inline-flex items-center gap-1 text-amber-900 font-semibold">
+                      <Images className="w-3 h-3" />
+                      <span>查看多角度 ({imgs.length}張)</span>
+                    </span>
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -763,10 +662,10 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
                   </div>
                   <div>
                     <h3 className="font-serif-title font-bold text-stone-900 text-base">
-                      上傳客製實品照片
+                      {editingPhotoId ? '編輯客製實品與多角度照片' : '上傳客製實品照片'}
                     </h3>
                     <p className="text-xs text-stone-500">
-                      填寫尺寸與客戶作品備註，方便訪客依尺寸快速檢索
+                      支援連續多選上傳（第 1 張為主圖，其餘為開門/關門/內部/內飾圖）
                     </p>
                   </div>
                 </div>
@@ -790,29 +689,57 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
                 {/* Image Picker */}
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    實品照片檔案 *
+                    實品照片檔案 * (支援連續多選上傳：主圖、開門、關門、內部、內飾等)
                   </label>
                   <input
                     type="file"
                     ref={fileInputRef}
-                    onChange={handleFileChange}
+                    onChange={handleMultipleFilesUpload}
                     accept="image/*"
+                    multiple
                     className="hidden"
                   />
-                  {previewImage ? (
-                    <div className="relative aspect-16/9 bg-stone-100 rounded-xl overflow-hidden border border-stone-200 flex items-center justify-center">
-                      <img
-                        src={previewImage}
-                        alt="Preview"
-                        className="w-full h-full object-contain"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="absolute bottom-2 right-2 bg-stone-900/80 text-white text-xs px-2.5 py-1 rounded-md"
-                      >
-                        更換圖片
-                      </button>
+                  {uploadImages.length > 0 ? (
+                    <div className="space-y-2">
+                      <div className="relative aspect-16/9 bg-stone-100 rounded-xl overflow-hidden border border-stone-200 flex items-center justify-center">
+                        <img
+                          src={previewImage || uploadImages[0]}
+                          alt="Preview"
+                          className="w-full h-full object-contain"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="absolute bottom-2 right-2 bg-stone-900/80 hover:bg-stone-900 text-white text-xs px-3 py-1.5 rounded-md font-semibold"
+                        >
+                          + 繼續添加照片 (可多選)
+                        </button>
+                      </div>
+                      {/* Thumbnails */}
+                      <div className="flex gap-2 overflow-x-auto pb-2">
+                        {uploadImages.map((imgUrl, i) => (
+                          <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-stone-300 shrink-0">
+                            <img src={imgUrl} alt={`預覽 ${i + 1}`} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = uploadImages.filter((_, idx) => idx !== i);
+                                setUploadImages(updated);
+                                setPreviewImage(updated[0] || null);
+                              }}
+                              className="absolute top-0 right-0 bg-red-600 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-bl font-bold"
+                              title="刪除此張"
+                            >
+                              ✕
+                            </button>
+                            {i === 0 && (
+                              <span className="absolute bottom-0 inset-x-0 bg-amber-900 text-white text-[8px] text-center font-bold">
+                                主圖
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ) : (
                     <div
@@ -821,10 +748,10 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
                     >
                       <Upload className="w-8 h-8 text-stone-400 mx-auto mb-2" />
                       <p className="text-xs font-medium text-stone-700">
-                        點擊選擇照片 或 拖曳檔案至此
+                        點擊連續上傳多張實拍照片（可多選）
                       </p>
                       <p className="text-[11px] text-stone-400 mt-1">
-                        支援 JPG、PNG、WEBP，大小建議 8MB 內
+                        支援一次選取多張主圖、開關門、內部及配件實拍
                       </p>
                     </div>
                   )}
@@ -930,7 +857,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
                     className="px-5 py-2 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
                   >
                     <CheckCircle className="w-3.5 h-3.5" />
-                    <span>{isUploading ? '儲存中...' : '確認上傳發佈'}</span>
+                    <span>{isUploading ? '儲存中...' : editingPhotoId ? '儲存變更' : '確認上傳發佈'}</span>
                   </button>
                 </div>
               </form>
@@ -949,6 +876,14 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = ({ onOpenImageZoo
           }
         }}
         actionTitle={authActionTitle}
+      />
+      {/* Multi-photo Lightbox Modal */}
+      <MultiPhotoLightbox
+        isOpen={lightboxOpen}
+        title={lightboxTitle}
+        images={lightboxImages}
+        subtitle={lightboxSubtitle}
+        onClose={() => setLightboxOpen(false)}
       />
     </section>
   );

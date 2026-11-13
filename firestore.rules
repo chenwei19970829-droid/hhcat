@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // 1. Featured Models Collection (Public Read & List, Validated Write)
+    match /featuredModels/{modelId} {
+      allow read, list: if true;
+      allow create, update, delete: if isValidId(modelId);
+    }
+
+    // 2. In-Stock Items Collection (Public Read & List, Validated Write)
+    match /inStockItems/{itemId} {
+      allow read, list: if true;
+      allow create, update, delete: if isValidId(itemId);
+    }
+
+    // 3. Showcase Gallery Photos Collection (Public Read & List, Validated Write)
+    match /showcasePhotos/{photoId} {
+      allow read, list: if true;
+      allow create, update, delete: if isValidId(photoId);
+    }
+
+    // 4. Storefront Hero Carousel Photos Collection (Public Read & List, Validated Write)
+    match /storefrontPhotos/{photoId} {
+      allow read, list: if true;
+      allow create, update, delete: if isValidId(photoId);
+    }
+  }
+}
+

@@ -1,13 +1,13 @@
 import React from 'react';
-import { Shield, Sparkles, Wind, Disc, Award, Heart, Droplets } from 'lucide-react';
+import { Shield, Sparkles, Wind, Disc, Award, Droplets } from 'lucide-react';
 
 export const MaterialsFeatures: React.FC = () => {
   const features = [
     {
       title: '天然松木無甲醛 · 實木厚度足 1.5cm',
-      subtitle: '原木質地 · 拒絕爛木頭與薄皮板',
+      subtitle: '原木質地 · 拒絕薄板與貼皮碎木',
       description:
-        '店長初心：不想貓咪住到爛木頭！本賣場純實木板厚度足足有 1.5cm，遠勝一般廉價薄木板與貼皮碎木。嚴選天然無甲醛松木，天然木紋純淨美觀，保留松木清香，安全耐用多年。',
+        '全櫃體採用足厚 1.5cm 純實木板，結構紮實承重力高，長期承載多隻大貓蹦跳也不變形，保留天然無甲醛松木清香。',
       icon: Shield
     },
     {
@@ -18,7 +18,7 @@ export const MaterialsFeatures: React.FC = () => {
       icon: Droplets
     },
     {
-      title: '高透耐磨安全亞克力門片',
+      title: '高透耐磨安全壓克力門片',
       subtitle: '非易碎玻璃 · 輕盈防爆防撞',
       description:
         '門片全面使用加厚高透耐磨壓克力，透光視野極佳！相比笨重易碎的玻璃更具韌性與抗衝擊力，徹底消除破裂危險，安全滿分。',
@@ -58,7 +58,7 @@ export const MaterialsFeatures: React.FC = () => {
             材質與極致工藝特色
           </h2>
           <p className="text-sm text-stone-600 mt-2">
-            天然松木無甲醛、表面微防水漆防潮、高透安全亞克力門，每一道工序皆為愛貓安全與實用而生
+            天然松木無甲醛、表面微防水漆防潮、高透安全壓克力門，每一道工序皆為愛貓安全與實用而生
           </p>
         </div>
 
@@ -85,11 +85,6 @@ export const MaterialsFeatures: React.FC = () => {
                   <p className="text-xs text-stone-600 leading-relaxed">
                     {item.description}
                   </p>
-                </div>
-
-                <div className="pt-3 border-t border-stone-100 flex items-center gap-1.5 text-[11px] text-stone-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-700" />
-                  <span>花花招財貓實體門店嚴格品檢</span>
                 </div>
               </div>
             );

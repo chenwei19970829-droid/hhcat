@@ -88,7 +88,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
         {/* Footer info */}
         <div className="px-6 py-3 bg-[#FAF8F5] border-t border-stone-200 text-xs text-stone-500 flex flex-wrap items-center justify-between gap-2">
           <span>花花招財貓 · 實體門店展示 · 支援全套尺寸客製化</span>
-          <span className="font-mono">電話 / LINE: 0966129569</span>
+          <span className="font-mono">電話: {STORE_INFO.phone} · LINE ID: {STORE_INFO.lineId}</span>
         </div>
       </div>
     </div>

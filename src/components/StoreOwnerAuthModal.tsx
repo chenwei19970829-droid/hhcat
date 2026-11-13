@@ -103,16 +103,19 @@ export const StoreOwnerAuthModal: React.FC<StoreOwnerAuthModalProps> = ({
                   try {
                     const { signInStoreOwnerWithGoogle } = await import('../firebase');
                     const user = await signInStoreOwnerWithGoogle();
-                    if (user) {
+                    if (user && user.email?.toLowerCase() === 'chenwei19970829@gmail.com') {
                       loginStoreOwner('david19970829');
+                      setErrorMsg('');
                       setIsSuccess(true);
                       setTimeout(() => {
                         setIsSuccess(false);
                         onClose();
                         onSuccess();
                       }, 700);
+                    } else if (user) {
+                      setErrorMsg(`此 Google 帳號 (${user.email || '未知'}) 非店主授權帳號，請使用店主帳號或輸入通關密碼。`);
                     }
-                  } catch (e: any) {
+                  } catch {
                     setErrorMsg('Google 登入失敗或已取消，您也可以直接使用通關密碼驗證。');
                   }
                 }}

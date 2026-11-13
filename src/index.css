@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
 @layer base {
+  html,
+  body {
+    overflow-x: clip;
+  }
+
   body {
     font-family: "Noto Sans TC", "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
     color: #2b2520;
@@ -10,6 +15,30 @@
   h1, h2, h3, .font-serif-title {
     font-family: "Noto Serif TC", "Noto Sans TC", serif;
   }
+}
+
+/* Hide scrollbars for horizontal tab strips on mobile */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
 }
 
 /* Custom scrollbar for sleek aesthetic */

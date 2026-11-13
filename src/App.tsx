@@ -107,7 +107,7 @@ export default function App() {
           onOpenImageZoom={handleOpenImageZoom}
         />
 
-        {/* 2. Brand Story & Muse Hua Hua: 創始初心、親手剪臍帶接生、1.5cm板材、成長相冊與上傳照片 */}
+        {/* 2. Brand Story & Muse Hua Hua: 首席鏟屎官初心、花花誕生故事與成長寫真 */}
         <BrandStorySection onOpenImageZoom={handleOpenImageZoom} />
 
         {/* 3. In-Stock Showcase: 門店現貨實拍區（台中豐原店內現成款式、支援店主上傳與售出刪除、現貨自取自理） */}
@@ -122,29 +122,29 @@ export default function App() {
         {/* 5. Customer Custom Showcase & Store Owner Upload Gallery (依尺寸檢索實品照) */}
         <ShowcaseGallery onOpenImageZoom={handleOpenImageZoom} />
 
-        {/* 6. Complete Menu Pricing Tables & Original Paper Menu Viewer */}
+        {/* 4. Complete Menu Pricing Tables & Original Paper Menu Viewer */}
         <PriceCatalog
           onOpenOriginalMenuModal={handleOpenOriginalMenu}
           onSelectDimensionForEstimator={(len, h) => scrollToEstimator(len, h)}
         />
 
-        {/* 7. Online Interactive Custom Quoting Estimator (帶入尺寸、加裝配件、LINE一鍵諮詢) */}
+        {/* 5. Online Interactive Custom Quoting Estimator (帶入尺寸、加裝配件、LINE一鍵諮詢) */}
         <EstimatorCalculator
           initialLength={estimatorDimensions.length}
           initialHeight={estimatorDimensions.height}
           onOpenImageZoom={handleOpenImageZoom}
         />
 
-        {/* 8. Order Disclaimers & Warranty Notice (出貨預組裝拍照、工具提醒、物流送一樓、1年保固全程錄影) */}
+        {/* 6. Order Disclaimers & Warranty Notice (出貨預組裝拍照、工具提醒、物流送一樓、1年保固全程錄影) */}
         <DisclaimerNotice />
 
-        {/* 9. Materials & Craftsmanship (天然松木無甲醛、高透安全壓克力、靜音五金、對流通風) */}
+        {/* 7. Materials & Craftsmanship (天然松木無甲醛、高透安全壓克力、靜音五金、對流通風) */}
         <MaterialsFeatures />
 
-        {/* 10. Frequently Asked Questions (常見問題與訂購流程) */}
+        {/* 8. Frequently Asked Questions (常見問題與訂購流程) */}
         <FaqSection />
 
-        {/* 11. Contact & Ordering Section: LINE, Phone, Store Address Cards with Direct Click */}
+        {/* 9. Contact & Ordering Section: LINE, Phone, Store Address Cards with Direct Click */}
         <ContactSection />
       </main>
 

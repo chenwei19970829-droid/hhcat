@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "FeaturedModel": {
+      "title": "FeaturedModel",
+      "description": "Custom cat villa model shown in Featured Models section",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "tagline": { "type": "string" },
+        "price": { "type": "string" },
+        "originalPrice": { "type": "string" },
+        "specs": { "type": "array" },
+        "features": { "type": "array" },
+        "highlights": { "type": "array" },
+        "category": { "type": "string" },
+        "dimensions": { "type": "string" },
+        "rating": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "isCustomUpload": { "type": "boolean" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "price", "imageUrl"]
+    },
+    "InStockItem": {
+      "title": "InStockItem",
+      "description": "Ready-to-ship or showroom stock item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "sizeTag": { "type": "string" },
+        "priceText": { "type": "string" },
+        "status": { "type": "string" },
+        "mainImage": { "type": "string" },
+        "interiorImage": { "type": "string" },
+        "detailImage": { "type": "string" },
+        "description": { "type": "string" },
+        "features": { "type": "array" },
+        "isCustomUpload": { "type": "boolean" },
+        "dateAdded": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "mainImage", "status"]
+    },
+    "ShowcasePhoto": {
+      "title": "ShowcasePhoto",
+      "description": "Delivered customer showcase photo and details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "client": { "type": "string" },
+        "location": { "type": "string" },
+        "dimensions": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "tags": { "type": "array" },
+        "likes": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "imageUrl"]
+    },
+    "StorefrontPhoto": {
+      "title": "StorefrontPhoto",
+      "description": "Storefront showcase carousel photos displayed in HeroSection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "imageUrl": { "type": "string" },
+        "caption": { "type": "string", "maxLength": 200 },
+        "deleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id"]
+    }
+  },
+  "firestore": {
+    "/featuredModels/{modelId}": {
+      "schema": "FeaturedModel",
+      "description": "Collection of featured cat villa models"
+    },
+    "/inStockItems/{itemId}": {
+      "schema": "InStockItem",
+      "description": "Collection of physical showroom and in-stock items"
+    },
+    "/showcasePhotos/{photoId}": {
+      "schema": "ShowcasePhoto",
+      "description": "Collection of customer delivery showcase photos"
+    },
+    "/storefrontPhotos/{photoId}": {
+      "schema": "StorefrontPhoto",
+      "description": "Collection of storefront real-scene carousel photos"
+    }
+  }
+}

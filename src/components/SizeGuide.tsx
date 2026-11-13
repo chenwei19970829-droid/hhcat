@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, CheckCircle2, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 interface SizeGuideProps {
   onSelectDimension: (length: number, height: number) => void;
@@ -137,7 +137,7 @@ export const SizeGuide: React.FC<SizeGuideProps> = ({ onSelectDimension }) => {
               ，預留貓咪轉身伸展空間與各品牌大號貓砂盆收納。可全套尺寸客製化！
             </span>
             <span className="font-medium text-stone-700">
-              有特殊畸零角或插座孔需求？歡迎加 LINE 直接由店長為您繪圖規劃
+              支援特殊畸零角與插座開孔客製
             </span>
           </div>
         </div>

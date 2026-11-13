@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FEATURED_MODELS, VillaModel, STORE_INFO } from '../data/catVillaData';
+import { MultiPhotoLightbox } from './MultiPhotoLightbox';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
+import { useStoreOwner } from '../utils/adminAuth';
+import { StoreOwnerAuthModal } from './StoreOwnerAuthModal';
 import {
   Maximize2,
   Calculator,
-  MessageCircle,
   Check,
-  Sparkles,
   Plus,
   Trash2,
   Edit3,
@@ -17,188 +18,9 @@ import {
   ChevronDown,
   ChevronUp,
   X,
-  AlertCircle
+  AlertCircle,
+  Images
 } from 'lucide-react';
-
-// Store Owner Auth Inline Helper
-const AUTH_STORAGE_KEY = 'hhcat_store_owner_auth_v1';
-const VALID_PASSKEYS = ['david19970829'];
-
-const isStoreOwnerLoggedIn = (): boolean => {
-  try {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem(AUTH_STORAGE_KEY) === 'true';
-  } catch {
-    return false;
-  }
-};
-
-const useStoreOwner = () => {
-  const [isOwner, setIsOwner] = useState<boolean>(() => isStoreOwnerLoggedIn());
-
-  useEffect(() => {
-    const handleUpdate = () => {
-      setIsOwner(isStoreOwnerLoggedIn());
-    };
-
-    window.addEventListener('hhcat_owner_auth_change', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
-
-    return () => {
-      window.removeEventListener('hhcat_owner_auth_change', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
-    };
-  }, []);
-
-  const logout = () => {
-    try {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      window.dispatchEvent(new Event('hhcat_owner_auth_change'));
-    } catch (e) {
-      console.warn(e);
-    }
-  };
-
-  return { isOwner, logout };
-};
-
-interface StoreOwnerAuthModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
-  actionTitle?: string;
-}
-
-const StoreOwnerAuthModal: React.FC<StoreOwnerAuthModalProps> = ({
-  isOpen,
-  onClose,
-  onSuccess,
-  actionTitle = '使用款式管理功能'
-}) => {
-  const [passkey, setPasskey] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [isSuccess, setIsSuccess] = useState(false);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!passkey.trim()) {
-      setErrorMsg('請輸入店主管理通關密碼');
-      return;
-    }
-
-    if (VALID_PASSKEYS.includes(passkey.trim().toLowerCase())) {
-      try {
-        localStorage.setItem(AUTH_STORAGE_KEY, 'true');
-        window.dispatchEvent(new Event('hhcat_owner_auth_change'));
-      } catch (err) {
-        console.warn(err);
-      }
-      setErrorMsg('');
-      setIsSuccess(true);
-      setTimeout(() => {
-        setIsSuccess(false);
-        setPasskey('');
-        onClose();
-        onSuccess();
-      }, 600);
-    } else {
-      setErrorMsg('密碼不正確！此功能僅限【花花招財貓】店主陳店長本人使用。');
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden">
-        <div className="bg-amber-900 text-white p-5 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-800/80 text-amber-200">
-              <Lock className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-serif-title font-bold text-base">店主身分安全驗證</h3>
-              <p className="text-xs text-amber-200/80">花花招財貓 · 款式管理專區</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-amber-200 hover:text-white hover:bg-amber-800/60 transition-colors"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200/80 text-xs text-stone-700 space-y-1.5">
-            <div className="font-bold text-amber-950">
-              <span>僅限店主本人操作：{actionTitle}</span>
-            </div>
-            <p className="text-stone-600 leading-relaxed">
-              為維護官網展示品質，精選款式上傳、價格調整與亮點編輯權限僅開放給店主本人使用。
-            </p>
-          </div>
-
-          {errorMsg && (
-            <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-800 flex items-start gap-2">
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
-          {isSuccess ? (
-            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-center space-y-2">
-              <div className="text-sm font-bold text-emerald-900">店主身分驗證成功！</div>
-              <p className="text-xs text-emerald-700">正在開啟管理面板...</p>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  店主管理通關密碼：
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={passkey}
-                    onChange={(e) => setPasskey(e.target.value)}
-                    placeholder="請輸入店主專屬管理密碼"
-                    autoFocus
-                    className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-800 focus:border-amber-800 pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-600"
-                  >
-                    {showPassword ? '隱藏' : '顯示'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex-1 py-2.5 text-xs font-semibold text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-xl transition-colors"
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-colors"
-                >
-                  確認驗證解鎖
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 interface FeaturedModelsProps {
   onSelectForQuote: (model: VillaModel) => void;
@@ -209,8 +31,7 @@ const STORAGE_KEY = 'hhcat_featured_custom_models_v2';
 const DELETED_MODELS_KEY = 'hhcat_deleted_models_ids_v1';
 
 export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
-  onSelectForQuote,
-  onOpenImageZoom
+  onSelectForQuote
 }) => {
   const { isOwner, logout } = useStoreOwner();
   const [filter, setFilter] = useState<'all' | '90' | '120' | '150' | '180'>('all');
@@ -235,9 +56,22 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
   const [formInstallFee, setFormInstallFee] = useState(1500);
   const [formRecommendedCats, setFormRecommendedCats] = useState('1-2 隻貓咪');
   const [formImage, setFormImage] = useState<string | null>(null);
+  const [formImages, setFormImages] = useState<string[]>([]);
   const [formHighlights, setFormHighlights] = useState<string[]>([]);
   const [newHighlightInput, setNewHighlightInput] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [lightboxTitle, setLightboxTitle] = useState('');
+  const [lightboxSubtitle, setLightboxSubtitle] = useState('');
+
+  const openLightbox = (title: string, images: string[], subtitle?: string) => {
+    setLightboxTitle(title);
+    setLightboxImages(images.filter(Boolean));
+    setLightboxSubtitle(subtitle || '');
+    setLightboxOpen(true);
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -269,10 +103,13 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
       collection(db, 'featuredModels'),
       (snapshot) => {
         if (!snapshot.empty) {
+          const deletedFromCloud = new Set<string>();
           const remoteModels: VillaModel[] = [];
           snapshot.forEach((docSnap) => {
             const data = docSnap.data();
-            if (data.fullModelData) {
+            if (data.deleted === true) {
+              deletedFromCloud.add(data.id || docSnap.id);
+            } else if (data.fullModelData) {
               try {
                 remoteModels.push(JSON.parse(data.fullModelData));
               } catch (e) {
@@ -295,6 +132,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                   dimensionCode: `${data.height || 120}-${data.depth || 60}-${data.length || 90}`
                 },
                 image: data.image,
+                images: Array.isArray(data.images) && data.images.length > 0 ? data.images : [data.image],
                 highlights: Array.isArray(data.highlights) ? data.highlights : ['天然松木', '安全壓克力'],
                 includedAccessories: Array.isArray(data.highlights) ? data.highlights : ['天然松木', '安全壓克力'],
                 recommendedCats: data.recommendedCats || '1-2 隻貓咪',
@@ -304,14 +142,18 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
             }
           });
 
-          if (remoteModels.length > 0) {
-            setModels((prev) => {
-              const remainingDefaults = FEATURED_MODELS.filter(
-                (orig) => !remoteModels.some((r) => r.id === orig.id)
-              );
-              return [...remoteModels, ...remainingDefaults];
-            });
-          }
+          let deletedIds: string[] = [];
+          try {
+            const deletedJson = localStorage.getItem(DELETED_MODELS_KEY);
+            deletedIds = deletedJson ? JSON.parse(deletedJson) : [];
+          } catch {}
+          setModels(() => {
+            const remainingDefaults = FEATURED_MODELS.filter(
+              (orig) => !remoteModels.some((r) => r.id === orig.id) && !deletedFromCloud.has(orig.id)
+            );
+            const activeRemotes = remoteModels.filter((r) => !deletedFromCloud.has(r.id));
+            return [...activeRemotes, ...remainingDefaults].filter((m) => !deletedIds.includes(m.id));
+          });
         }
       },
       (error) => {
@@ -340,6 +182,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     setFormInstallFee(1500);
     setFormRecommendedCats('1-2 隻貓咪');
     setFormImage(null);
+    setFormImages([]);
     setFormHighlights(['天然松木無甲醛', '靜音萬向輪', '高透壓克力門', '側邊格柵通風']);
     setFormError(null);
     setIsFormModalOpen(true);
@@ -364,6 +207,8 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     setFormInstallFee(model.installFee);
     setFormRecommendedCats(model.recommendedCats || '1-2 隻貓咪');
     setFormImage(model.image);
+    const existingImgs = model.images && model.images.length > 0 ? model.images : [model.image];
+    setFormImages(existingImgs);
     setFormHighlights(
       model.includedAccessories && model.includedAccessories.length > 0
         ? [...model.includedAccessories]
@@ -402,22 +247,39 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     }
 
     try {
-      await deleteDoc(doc(db, 'featuredModels', model.id));
+      await setDoc(doc(db, 'featuredModels', model.id), {
+        id: model.id,
+        deleted: true,
+        updatedAt: new Date().toISOString()
+      });
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `featuredModels/${model.id}`);
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleMultipleImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     try {
       setFormError(null);
-      const compressed = await compressImage(file, 1000, 0.8);
-      setFormImage(compressed);
-    } catch (err) {
-      setFormError('圖片壓縮處理失敗，請更換一張試試');
+      const compressedList: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.type.startsWith('image/')) {
+          const compressed = await compressImage(file, 960, 0.74);
+          compressedList.push(compressed);
+        }
+      }
+      if (compressedList.length > 0) {
+        const updated = [...formImages, ...compressedList];
+        setFormImages(updated);
+        setFormImage(updated[0]);
+      }
+    } catch {
+      setFormError('多張照片壓縮處理失敗，請重試');
+    } finally {
+      e.target.value = '';
     }
   };
 
@@ -440,8 +302,9 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
       setFormError('請填寫款式標題名稱');
       return;
     }
-    if (!formImage) {
-      setFormError('請上傳款式外觀照片');
+    const finalImages = formImages.length > 0 ? formImages : (formImage ? [formImage] : []);
+    if (finalImages.length === 0) {
+      setFormError('請至少上傳一張款式外觀照片');
       return;
     }
 
@@ -461,7 +324,8 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
         length: Number(formLength) || 90,
         dimensionCode: `${formHeight}-${formDepth}-${formLength}`
       },
-      image: formImage,
+      image: finalImages[0],
+      images: finalImages,
       highlights: formHighlights,
       includedAccessories: formHighlights,
       recommendedCats: formRecommendedCats.trim() || '1-2 隻貓咪',
@@ -498,9 +362,11 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
         depth: newModel.dimensions.depth,
         length: newModel.dimensions.length,
         image: newModel.image,
+        images: newModel.images || [],
         highlights: newModel.highlights,
         recommendedCats: newModel.recommendedCats,
-        fullModelData: JSON.stringify(newModel),
+        suitableSpace: newModel.suitableSpace,
+        deleted: false,
         updatedAt: new Date().toISOString()
       });
     } catch (err) {
@@ -509,10 +375,6 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
 
     setIsFormModalOpen(false);
   };
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filter, showAllCards]);
 
   // Filter models based on user selected height group
   const filteredModels = models.filter((model) => {
@@ -570,7 +432,6 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
             >
               {isOwner ? (
                 <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   <Plus className="w-4 h-4" />
                   <span>店主新增/上傳款式</span>
                 </>
@@ -667,7 +528,9 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
 
         {/* Models Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {displayedModels.map((model) => (
+          {displayedModels.map((model) => {
+            const imgs = model.images && model.images.length > 0 ? model.images : [model.image];
+            return (
             <div
               key={model.id}
               className="bg-white rounded-2xl border border-stone-200 overflow-hidden hover:shadow-lg hover:border-amber-800/40 transition-all flex flex-col group relative"
@@ -675,25 +538,33 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
               {/* Product Studio Refined Photo with Click Zoom */}
               <div
                 className="relative aspect-4/3 bg-[#F6F2EC] p-2 cursor-pointer overflow-hidden border-b border-stone-100 flex items-center justify-center"
-                onClick={() =>
-                  onOpenImageZoom(
+                onClick={() => {
+                  openLightbox(
                     model.name,
-                    model.image,
+                    imgs,
                     `規格：${model.dimensions.dimensionCode}（高${model.dimensions.height} x 深${model.dimensions.depth} x 長${model.dimensions.length} cm）`
-                  )
-                }
-                title="點擊放大查看高清精修細節圖"
+                  );
+                }}
+                title="點擊左右滑動查看多角度實拍細節"
               >
                 <img
-                  src={model.image}
+                  src={imgs[0] || model.image}
                   alt={model.name}
                   className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                   loading="lazy"
                 />
 
-                {/* Zoom indicator overlay */}
-                <div className="absolute top-3 right-3 p-2 bg-white/90 backdrop-blur-xs rounded-lg text-stone-700 shadow-xs group-hover:bg-amber-900 group-hover:text-white transition-colors">
-                  <Maximize2 className="w-4 h-4" />
+                {/* Top Right Photo Count + Zoom indicator */}
+                <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                  {imgs.length > 1 && (
+                    <span className="px-2 py-1 bg-stone-900/75 text-white text-[11px] font-semibold rounded-lg backdrop-blur-xs flex items-center gap-1">
+                      <Images className="w-3.5 h-3.5 text-amber-300" />
+                      <span>{imgs.length} 張</span>
+                    </span>
+                  )}
+                  <div className="p-2 bg-white/90 backdrop-blur-xs rounded-lg text-stone-700 shadow-xs group-hover:bg-amber-900 group-hover:text-white transition-colors">
+                    <Maximize2 className="w-4 h-4" />
+                  </div>
                 </div>
 
                 {/* Badge */}
@@ -708,11 +579,6 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                   {model.dimensions.dimensionCode} cm
                 </div>
 
-                {/* Free shipping pill */}
-                <div className="absolute bottom-3 right-3 bg-emerald-700/90 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded font-medium">
-                  免運 (偏遠離島除外)
-                </div>
-
                 {/* Store Owner Quick Controls Overlay */}
                 {isOwner && (
                   <div className="absolute inset-x-3 bottom-12 flex items-center justify-between gap-2 z-10">
@@ -722,7 +588,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                       className="px-2.5 py-1 bg-amber-900/90 hover:bg-amber-900 text-white text-[11px] font-semibold rounded-lg shadow-sm flex items-center gap-1 backdrop-blur-xs"
                     >
                       <Edit3 className="w-3 h-3" />
-                      <span>編輯卡片/標籤</span>
+                      <span>編輯/加圖</span>
                     </button>
 
                     <button
@@ -809,7 +675,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                 <div className="pt-4 border-t border-stone-100">
                   <div className="flex items-baseline justify-between mb-3">
                     <div>
-                      <span className="text-[11px] text-stone-400">客製空屋價（免運不含偏遠離島）</span>
+                      <span className="text-[11px] text-stone-400">客製空屋價</span>
                       <div className="text-2xl font-bold text-amber-900 font-mono tabular-nums">
                         NT$ {model.price.toLocaleString()}
                       </div>
@@ -832,22 +698,26 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                       <span>帶入試算</span>
                     </button>
 
-                    <a
-                      href={`${STORE_INFO.lineUrl}?text=${encodeURIComponent(
-                        `您好！我在花花招財貓網站看到【${model.name} (${model.dimensions.dimensionCode})】，想諮詢客製排單與出貨時程！`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-1 py-2.5 px-3 text-xs font-semibold text-white bg-[#06C755] hover:bg-[#05b34c] rounded-lg shadow-xs transition-colors"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openLightbox(
+                          model.name,
+                          imgs,
+                          `規格：${model.dimensions.dimensionCode}（高${model.dimensions.height} x 深${model.dimensions.depth} x 長${model.dimensions.length} cm）`
+                        )
+                      }
+                      className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-lg shadow-xs transition-colors"
                     >
-                      <MessageCircle className="w-3.5 h-3.5" />
-                      <span>LINE 諮詢此款</span>
-                    </a>
+                      <Images className="w-3.5 h-3.5" />
+                      <span>看細節{imgs.length > 1 ? `(${imgs.length}張)` : '大圖'}</span>
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* View More & Pagination Controls */}
@@ -967,25 +837,53 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
               {/* Photo Upload & Preview */}
               <div>
                 <label className="block font-bold text-stone-800 mb-1">
-                  款式外觀實拍照 * (建議 JPG / PNG)
+                  款式外觀與多角度實拍照 * (支援連續多選上傳：主圖、開門、關門、內部、內飾等)
                 </label>
                 <input
                   type="file"
                   ref={fileInputRef}
                   accept="image/*"
-                  onChange={handleImageUpload}
+                  multiple
+                  onChange={handleMultipleImagesUpload}
                   className="hidden"
                 />
-                {formImage ? (
-                  <div className="relative aspect-16/10 rounded-xl overflow-hidden bg-stone-100 border border-stone-300 flex items-center justify-center">
-                    <img src={formImage} alt="款式預覽" className="w-full h-full object-contain" />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="absolute bottom-2 right-2 px-3 py-1.5 bg-stone-900/80 hover:bg-stone-900 text-white rounded-lg text-xs font-semibold shadow-xs"
-                    >
-                      更換照片
-                    </button>
+                {formImages.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="relative aspect-16/10 rounded-xl overflow-hidden bg-stone-100 border border-stone-300 flex items-center justify-center">
+                      <img src={formImage || formImages[0]} alt="款式主圖預覽" className="w-full h-full object-contain" />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="absolute bottom-2 right-2 px-3 py-1.5 bg-stone-900/80 hover:bg-stone-900 text-white rounded-lg text-xs font-semibold shadow-xs"
+                      >
+                        + 繼續添加照片 (可多選)
+                      </button>
+                    </div>
+                    {/* Thumbnails grid */}
+                    <div className="flex gap-2 overflow-x-auto pb-2">
+                      {formImages.map((imgUrl, i) => (
+                        <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-stone-300 shrink-0">
+                          <img src={imgUrl} alt={`預覽 ${i + 1}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = formImages.filter((_, idx) => idx !== i);
+                              setFormImages(updated);
+                              setFormImage(updated[0] || null);
+                            }}
+                            className="absolute top-0 right-0 bg-red-600 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-bl font-bold"
+                            title="刪除此張照片"
+                          >
+                            ✕
+                          </button>
+                          {i === 0 && (
+                            <span className="absolute bottom-0 inset-x-0 bg-amber-900 text-white text-[8px] text-center font-bold">
+                              主圖
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <div
@@ -993,8 +891,8 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                     className="border-2 border-dashed border-stone-300 hover:border-amber-700 bg-stone-50 rounded-xl p-6 text-center cursor-pointer transition-colors"
                   >
                     <Upload className="w-8 h-8 text-stone-400 mx-auto mb-2" />
-                    <p className="font-semibold text-stone-700">點擊上傳款式外觀照片</p>
-                    <p className="text-[11px] text-stone-400 mt-0.5">支援手機拍照直接上傳或選取檔案</p>
+                    <p className="font-semibold text-stone-700">點擊連續上傳多張實拍照片（可多選）</p>
+                    <p className="text-[11px] text-stone-400 mt-0.5">支援一次選取多張主圖、開關門、內部及配件實拍</p>
                   </div>
                 )}
               </div>
@@ -1229,6 +1127,14 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
           }
         }}
         actionTitle={authActionTitle}
+      />
+      {/* Multi-photo Lightbox Modal */}
+      <MultiPhotoLightbox
+        isOpen={lightboxOpen}
+        title={lightboxTitle}
+        images={lightboxImages}
+        subtitle={lightboxSubtitle}
+        onClose={() => setLightboxOpen(false)}
       />
     </section>
   );

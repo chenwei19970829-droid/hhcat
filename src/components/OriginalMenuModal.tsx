@@ -14,6 +14,7 @@ export const OriginalMenuModal: React.FC<OriginalMenuModalProps> = ({
   onClose
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   useEffect(() => {
     if (initialIndex >= 0 && initialIndex < MENU_CATEGORIES.length) {
@@ -102,11 +103,28 @@ export const OriginalMenuModal: React.FC<OriginalMenuModalProps> = ({
         </div>
 
         {/* Main Image viewer */}
-        <div className="relative flex-1 bg-stone-900 p-4 flex items-center justify-center overflow-auto min-h-[350px]">
+        <div
+          className="relative flex-1 bg-stone-900 p-4 flex items-center justify-center overflow-auto min-h-[350px] touch-pan-y"
+          onTouchStart={(e) => {
+            if (e.touches && e.touches.length > 0) {
+              setTouchStartX(e.touches[0].clientX);
+            }
+          }}
+          onTouchEnd={(e) => {
+            if (touchStartX === null) return;
+            const endX = e.changedTouches?.[0]?.clientX;
+            if (typeof endX === 'number') {
+              const diff = touchStartX - endX;
+              if (diff > 40) nextMenu();
+              else if (diff < -40) prevMenu();
+            }
+            setTouchStartX(null);
+          }}
+        >
           <button
             type="button"
             onClick={prevMenu}
-            className="absolute left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-stone-950/70 hover:bg-stone-950 text-white transition-all shadow-md z-10"
+            className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-stone-950/70 hover:bg-stone-950 text-white transition-all shadow-md z-10"
             title="上一張 (方向鍵左)"
           >
             <ChevronLeft className="w-6 h-6" />
@@ -115,13 +133,14 @@ export const OriginalMenuModal: React.FC<OriginalMenuModalProps> = ({
           <img
             src={currentCategory.originalImage}
             alt={currentCategory.title}
-            className="max-h-[68vh] w-auto max-w-full object-contain rounded shadow-lg"
+            className="max-h-[68vh] w-auto max-w-full object-contain rounded shadow-lg select-none"
+            draggable={false}
           />
 
           <button
             type="button"
             onClick={nextMenu}
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-stone-950/70 hover:bg-stone-950 text-white transition-all shadow-md z-10"
+            className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-stone-950/70 hover:bg-stone-950 text-white transition-all shadow-md z-10"
             title="下一張 (方向鍵右)"
           >
             <ChevronRight className="w-6 h-6" />

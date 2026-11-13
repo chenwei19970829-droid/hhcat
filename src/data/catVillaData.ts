@@ -13,6 +13,7 @@ export interface VillaModel {
   price: number;
   installFee: number;
   image: string;
+  images?: string[];
   styleVariant?: string;
   includedAccessories: string[];
   recommendedCats: string;
@@ -20,6 +21,7 @@ export interface VillaModel {
   highlights: string[];
   description: string;
   badge?: string;
+  isCustomUpload?: boolean;
 }
 
 export interface MenuItemPrice {
@@ -53,6 +55,7 @@ export interface ShowcasePhoto {
   sizeCategory: '60' | '90' | '120' | '150' | '180' | 'custom';
   dimensionsText: string;
   imageUrl: string;
+  images?: string[];
   customerNote: string;
   date: string;
   tags: string[];
@@ -73,8 +76,8 @@ export interface TravelFeeRegion {
 
 export const STORE_INFO = {
   name: '花花招財貓',
-  logoImage: '/assets/aistudio/logo_6994c231.jpg',
   englishName: 'Hua Hua Lucky Cat Custom Wooden Cat Villas',
+  logoImage: '/assets/aistudio/logo_6994c231.jpg',
   tagline: '天然松木無甲醛 · 實木厚度足1.5cm · 手工全套客製 · 新竹物流直送',
   address: '臺中市豐原區圓環西路97號',
   phone: '0966129569',
@@ -86,7 +89,7 @@ export const STORE_INFO = {
   travelFeeSheetImage: '/assets/aistudio/image_1f5360da.png',
   googleMapsUrl: 'https://maps.google.com/?q=' + encodeURIComponent('臺中市豐原區圓環西路97號 花花招財貓'),
   facebookName: '花花招財貓｜客製化實木貓別墅/貓櫃/貓籠',
- facebookUrl: 'https://www.facebook.com/profile.php?id=61586279835355',
+  facebookUrl: 'https://www.facebook.com/profile.php?id=61586279835355',
   instagramHandle: 'hhcat.1226',
   instagramUrl: 'https://www.instagram.com/hhcat.1226',
   threadsUrl: 'https://www.threads.net/@hhcat.1226',
@@ -714,6 +717,20 @@ export const ACCESSORY_OPTIONS: AccessoryOption[] = [
     price: 300,
     description: '給膽小或喜愛幽暗環境貓咪最安心的避風港',
     iconName: 'Home'
+  },
+  {
+    id: 'acc-bowl-double',
+    name: '純實木碗架（雙碗）',
+    price: 600,
+    description: '精緻天然松木雙孔碗架，附食品級陶瓷碗，高度適中保護貓咪頸椎',
+    iconName: 'Utensils'
+  },
+  {
+    id: 'acc-bowl-triple',
+    name: '純實木碗架（三碗）',
+    price: 800,
+    description: '三孔大容量實木碗架，乾糧、濕食、清水一次滿足，多貓家庭必備',
+    iconName: 'Utensils'
   }
 ];
 
@@ -809,14 +826,13 @@ export const HUA_HUA_STORY = {
   birthday: '2021年6月23日',
   gender: '母貓（已絕育）',
   breed: '英國短毛貓 (英短藍貓)',
-  role: '品牌靈感 Muse · 臺中豐原門店榮譽店長',
+  role: '臺中豐原店小老闆 · 最稱職的試睡員',
   biography: [
-    '「花花」是我在懷孕母貓身邊親自接生的小生命。當時母貓一共生了 3 隻小貓，花花是最後一隻出生、也是體型最微小的早產貓。因為貓媽媽是第一次生寶寶完全沒有經驗，小貓的臍帶都是店長親自拿著剪刀小心翼翼剪斷的。',
-    '由於是早產兒，體質非常微弱纖小，哪怕身旁只有另外兩隻手足，花花也爭搶不到母乳喝。看著奄奄一息的小身軀，店長毅然決然承擔起全職貓爸的責任，不分晝夜、每隔兩三個小時親自拿小針筒與奶瓶，一滴一滴將花花親手餵養長大。',
-    '後來為花花選購生活用具時，滿懷期待在網路上購買了貓別墅，拆箱後卻發現迎面而來刺鼻刺眼的劣質膠水味與劣質碎木，小貓根本不敢進去。這段心疼的經歷讓店長下定決心：一定要親自創立【花花招財貓】，專注打造純天然松木無甲醛、純實木板厚度足足 1.5cm 的高品質貓城堡，讓全台灣的小貓都能生活在真正健康、溫暖、安全的家！',
-    '現在的花花已經健康長大、圓滾滾又黏人，偶爾還會親自到臺中豐原門店「上班」當榮譽小店長巡視呢！'
+    '接生那天真的嚇出一身冷汗\n花花是貓媽媽最後才生出來的老么，也是隻早產兒。剛落地時小得跟我的大拇指差不多，呼吸微弱到幾乎感覺不到。貓媽媽又是第一次當媽媽，完全手忙腳亂不會處理，最後是我拿著小剪刀，手抖著幫花花把臍帶剪斷的。\n\n因為太小隻又沒力氣，花花完全搶不到母奶，眼看就快撐不過去。那陣子我乾脆當起全職奶爸，設鬧鐘每兩三個小時起床一次，拿小針筒跟奶瓶一滴一滴慢慢餵、幫牠擦身體保暖，硬是把這小傢伙從鬼門關前搶了回來。',
+    '一次網購踩雷，讓我氣到決定自己做\n等花花慢慢長大開始愛爬高，我興沖沖在網路上買了一座看起來很漂亮的貓別墅想當牠的禮物。結果箱子一拆開我整個傻眼——刺鼻的甲醛膠水味薰到眼睛張不開，木板又薄又碎，花花在門口聞了兩下就嚇得躲回沙發底下。\n\n看著好不容易拉拔長大的孩子，難道要讓牠天天吸這種刺鼻味、住在會搖的爛木頭裡嗎？那天晚上我直接決定：算了，求人不如求己，乾脆自己找工廠盯木料，做真正敢讓花花住進去打滾的實木貓別墅！',
+    '只做我自己也敢給花花用的好木頭\n就這樣才有了「花花招財貓」。我沒什麼華麗的大道理，標準一直很簡單：我自己放心給花花睡的，才會交到其他貓奴家長手上。木頭一定要天然無甲醛的純松木，板材實打實做到 1.5 公分厚，才夠穩、才耐得住主子天天跳上跳下。\n\n現在的花花已經是個圓滾滾又超黏人的撒嬌精了，我畫客製圖時最愛趴在鍵盤旁「監工」，心情好還會去臺中豐原店裡巡邏賣萌呢！'
   ],
-  missionStatement: '店長初心：不想貓咪住到爛木頭！本賣場純實木板厚度足足有 1.5cm，可以使用很久，讓小貓生活在健康的城堡裡。',
+  missionStatement: '我就想讓毛孩睡得安穩、吸不到刺鼻味，所以店裡木板一律實打實做到 1.5cm 厚天然松木，耐用好幾年也不會搖晃。',
   storeNotice: '門店來訪須提前預約！店長有時外出到府組裝不在店內，提前預約避免跑空。',
   customPhotoStatement: '可以把在網路上看到的照片或喜歡的款式照片發給我，我這邊按照照片 1:1 製作！客製化高度、深度、長度都是可以隨意修改。',
   stairsNotice: '上門安裝如果現場無電梯需要爬樓梯，需要額外提前報備，會依樓層加收搬運費用，具體請加 LINE 諮詢。',
@@ -986,7 +1002,7 @@ export const INITIAL_SHOWCASE_PHOTOS: ShowcasePhoto[] = [
 export const FAQS = [
   {
     q: '花花招財貓的板材厚度與門片是什麼材質？',
-    a: '我的初心就是「不想貓咪住到爛木頭」！本賣場全純實木板厚度皆足足有 1.5cm，堅固厚實可以使用很久，遠勝於市面劣質薄板或貼皮碎木板。我堅持採用「天然松木無甲醛」板材，表面塗刷些許環保防水漆保護木質防潮防潑水。透明門片並非使用易碎沉重的玻璃，而是全面採用「高透耐磨安全壓克力板」，透光通透無阻、輕盈防撞且抗碎裂，保障貓咪嬉戲時的絕對安全。'
+    a: '全部採用 1.5cm 厚的天然無甲醛松木實木板，穩固耐用好幾年，不是市面那種薄板或貼皮碎木板。板材表面會上一層微防水漆保護木頭方便日常擦拭；透明門片則用高透耐磨的安全壓克力板，不像玻璃容易碎或太重，安全又透亮。'
   },
   {
     q: '深度可以超過 60cm 嗎？高度可以超過 180cm 嗎？價格如何計算？',

@@ -1,6 +1,6 @@
 import React from 'react';
 import { STORE_INFO } from '../data/catVillaData';
-import { Phone, MessageCircle, MapPin, ArrowUp, Heart } from 'lucide-react';
+import { Phone, MessageCircle, MapPin, ArrowUp } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   const scrollToTop = () => {
@@ -32,7 +32,7 @@ export const Footer: React.FC = () => {
             </div>
 
             <p className="text-xs text-stone-400 leading-relaxed max-w-sm">
-              堅持採用天然松木無甲醛板材，純實木板厚度足足 1.5cm，表面塗刷些許環保防水漆保護木質防潮，搭配高透耐磨安全壓克力門片。工廠在大陸專注客製生產，出貨前預組裝拍照確認無誤，直寄台灣享免運費（免運不包含偏遠地區還有離島），由新竹物流配送至一樓。
+              花花招財貓 · 台中豐原手工實木貓別墅展示中心，用心為毛孩量身打造安穩舒適的家。
             </p>
 
             <div className="pt-2 text-xs text-stone-400 space-y-1.5">
@@ -68,20 +68,6 @@ export const Footer: React.FC = () => {
               >
                 Threads / IG：hhcat.1226
               </a>
-            </div>
-
-            {/* QR code box in Footer */}
-            <div className="pt-2 flex items-center gap-3 bg-stone-900/60 p-3 rounded-xl border border-stone-800/80 max-w-xs">
-              <img
-                src={STORE_INFO.lineQrCode}
-                alt="LINE QR Code"
-                className="w-14 h-14 rounded-lg bg-white p-1 border border-stone-700 object-contain shrink-0"
-              />
-              <div className="text-xs">
-                <div className="font-bold text-stone-200">加店長 LINE 諮詢</div>
-                <div className="text-[11px] text-stone-400 font-mono">ID：{STORE_INFO.lineId}</div>
-                <div className="text-[10px] text-amber-400/90 mt-0.5">手機對準螢幕掃描</div>
-              </div>
             </div>
           </div>
 
@@ -146,16 +132,13 @@ export const Footer: React.FC = () => {
             </h4>
             <div className="bg-stone-900/80 rounded-xl p-4 border border-stone-800 text-xs text-stone-400 space-y-2">
               <p>
-                <strong>物流配送：</strong>工廠在大陸，製作完成後直送台灣免運費（免運不包含偏遠地區還有離島），由新竹物流配送至一樓。
+                <strong>門店營業：</strong>週一至週日 10:00 - 21:00（臺中市豐原區圓環西路97號）。
               </p>
               <p>
-                <strong>出貨驗貨：</strong>出貨前預組裝拍照確認無誤後妥善打包。提供店長本人親自入鏡示範的教學影片，建議自備電動螺絲起子。
+                <strong className="text-amber-400">來訪預約提醒：</strong>店長常外出到府組裝不在店內，來店前請務必先電話或 LINE 預約，避免撲空。
               </p>
               <p>
-                <strong>品質保固：</strong>享 1 年保固（收貨拆箱請務必全程錄影，非人為損壞憑影片免費補發更換）。純實木板厚度足 1.5cm，堅固耐用。
-              </p>
-              <p>
-                <strong>門店營業：</strong>週一至週日 10:00 - 21:00（臺中市豐原區圓環西路97號）。<strong className="text-amber-400">門店來訪須提前預約！</strong>店長有時外出到府組裝不在店內，提前預約避免跑空。
+                <strong>保固與配送：</strong>全台免運宅配到一樓（偏遠及離島另計），憑收貨拆箱全程錄影享 1 年非人為保固補件。
               </p>
             </div>
           </div>

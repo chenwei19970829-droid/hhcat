@@ -1,6 +1,5 @@
 import React from 'react';
 import { Camera, Wrench, Truck, ShieldCheck, AlertCircle, Video, CheckCircle } from 'lucide-react';
-import { STORE_INFO } from '../data/catVillaData';
 
 export const DisclaimerNotice: React.FC = () => {
   return (
@@ -94,7 +93,7 @@ export const DisclaimerNotice: React.FC = () => {
                 03. 物流配送說明（新竹物流）
               </h3>
               <p className="text-xs text-stone-600 leading-relaxed mt-2">
-                工廠在大陸，製作完後運送到台灣，享有<strong>免運費</strong>服務（<strong>免運不包含偏遠地區還有離島</strong>）。大型傢俱由<strong>新竹物流</strong>配送，原則上<strong>僅配送至一樓</strong>，敬請見諒。若需我們師傅到府組裝且現場無電梯需爬樓梯搬運，需額外提前報備加收樓層費，具體請加 LINE 諮詢。物流運輸過程中若有極輕微的摩擦痕跡，或板材本身的自然木紋、微小結痂，屬於自然原木現象，不影響整體結構與美觀。
+                工廠在大陸，製作完後運送到台灣，享有<strong>免運費</strong>服務（<strong>免運不包含偏遠地區還有離島</strong>）。大型傢俱由<strong>新竹物流</strong>配送，原則上<strong>僅配送至一樓</strong>，敬請見諒。若需我們師傅到府組裝且現場無電梯需爬樓梯搬運，需額外提前報備加收樓層費。物流運輸過程中若有極輕微的摩擦痕跡，或板材本身的自然木紋、微小結痂，屬於自然原木現象，不影響整體結構與美觀。
               </p>
             </div>
 
@@ -129,21 +128,6 @@ export const DisclaimerNotice: React.FC = () => {
               <span>拆箱全程錄影，破損免費補寄更換</span>
             </div>
           </div>
-        </div>
-
-        {/* Reassurance Footer Banner */}
-        <div className="mt-8 p-4 bg-amber-50/80 rounded-xl border border-amber-200/80 text-xs text-amber-900 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
-          <span>
-            花花招財貓堅持把關每道工序：<strong>店長初心不想貓咪住到爛木頭</strong>，<strong>純實木板厚度足 1.5cm</strong>、<strong>天然松木無甲醛</strong>、<strong>表面微防水漆</strong>、<strong>高透安全亞克力門</strong>，讓愛貓住得健康、家長買得放心。
-          </span>
-          <a
-            href={STORE_INFO.lineUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs font-bold text-amber-900 hover:underline shrink-0"
-          >
-            有疑問？加 LINE 線上詢問店長 &rarr;
-          </a>
         </div>
       </div>
     </section>

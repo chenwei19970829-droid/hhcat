@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { MENU_CATEGORIES, ACCESSORY_OPTIONS, STORE_INFO } from '../data/catVillaData';
-import { Table, Eye, Check, Info, FileText, ArrowRight, ShieldAlert, Sparkles } from 'lucide-react';
+import { MENU_CATEGORIES, ACCESSORY_OPTIONS } from '../data/catVillaData';
+import { Eye, Info, FileText, ArrowRight, Sparkles } from 'lucide-react';
 
 interface PriceCatalogProps {
   onOpenOriginalMenuModal: (lengthIndex?: number) => void;
@@ -43,28 +43,16 @@ export const PriceCatalog: React.FC<PriceCatalogProps> = ({
           </button>
         </div>
 
-        {/* Founder Mission & Custom Surcharge Highlight Banner */}
-        <div className="mb-8 p-4 sm:p-5 bg-amber-50/90 rounded-2xl border border-amber-200/90 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 font-bold text-amber-950 text-sm">
-              <Sparkles className="w-4 h-4 text-amber-800 shrink-0" />
-              <span>店長初心：不想貓咪住到爛木頭！純實木板厚度足足 1.5cm</span>
-            </div>
-            <p className="text-amber-900 leading-relaxed">
-              本賣場純實木板材厚度足足有 1.5cm，耐用多年不變形，杜絕劣質膠合碎木！支援 1:1 照照片量身製作。
-            </p>
-            <p className="text-[11px] text-stone-500">
-              📐 深度超過 60cm：每 10cm 一個區間 (+NT$ 3,000) ｜ 垂直高度超過 180cm：每 10cm 一個區間 (+NT$ 1,000)
-            </p>
+        {/* Custom Dimension Surcharge Note */}
+        <div className="mb-8 p-4 bg-amber-50/90 rounded-2xl border border-amber-200/90 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="font-semibold text-amber-950">
+            支援 1:1 依圖客製，高度與深度皆可彈性加碼：
           </div>
-          <a
-            href={STORE_INFO.lineUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-[#06C755] hover:bg-[#05b34c] rounded-xl shrink-0 transition-colors shadow-2xs"
-          >
-            <span>傳照片諮詢 1:1 客製</span>
-          </a>
+          <div className="text-[11px] text-stone-700 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>深度超過 60cm：每 10cm +NT$ 3,000</span>
+            <span className="hidden sm:inline text-stone-300">|</span>
+            <span>垂直高度超過 180cm：每 10cm +NT$ 1,000</span>
+          </div>
         </div>
 
         {/* Length Series Tabs */}
@@ -110,15 +98,81 @@ export const PriceCatalog: React.FC<PriceCatalogProps> = ({
               </button>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile View: Clean, Spacious Model Cards (md:hidden) */}
+            <div className="md:hidden divide-y divide-stone-100">
+              {activeCategory.items.map((item) => (
+                <div
+                  key={item.dimensionCode}
+                  className="p-4 bg-white hover:bg-amber-50/30 transition-colors space-y-3"
+                >
+                  {/* Row 1: Model Code & Price */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono font-bold text-base text-amber-950 tracking-tight whitespace-nowrap bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200/80 shadow-2xs">
+                          {item.dimensionCode}
+                        </span>
+                        {item.bundledNote && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300">
+                            <Sparkles className="w-3 h-3 text-amber-700" />
+                            <span>{item.bundledNote}</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-stone-600 mt-1.5 font-medium">
+                        高 {item.height} × 深 {item.depth} × 長 {item.length} cm
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <span className="text-[10px] text-stone-400 block font-medium">客製售價</span>
+                      <span className="font-mono font-bold text-base text-amber-900 tabular-nums">
+                        NT$ {item.price.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Specifications summary */}
+                  <div className="grid grid-cols-2 gap-2 text-xs py-2 px-3 bg-stone-50 rounded-xl border border-stone-100">
+                    <div>
+                      <span className="text-stone-400 text-[11px] block">到府安裝工資</span>
+                      <span className="font-mono font-semibold text-stone-800">
+                        NT$ {item.installFee.toLocaleString()}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-stone-400 text-[11px] block">配置說明</span>
+                      <span className="text-stone-700 font-medium">
+                        {item.bundledNote ? '標配 + 附贈配件' : '純實木1.5cm 標配'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Action Button */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => onSelectDimensionForEstimator(item.length, item.height)}
+                      className="w-full py-2.5 px-3 text-xs font-semibold text-stone-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 rounded-xl transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                    >
+                      <span>試算此規格</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-amber-800" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop View: Wide Table with Non-wrapping Headers (hidden md:block) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-stone-200 bg-stone-100/60 text-stone-500 font-semibold">
-                    <th className="py-3 px-4">尺寸規格 (高-深-長)</th>
-                    <th className="py-3 px-4">內附配件說明</th>
-                    <th className="py-3 px-4 text-right">客製空屋售價</th>
-                    <th className="py-3 px-4 text-right">到府安裝工資</th>
-                    <th className="py-3 px-4 text-center">快捷試算</th>
+                  <tr className="border-b border-stone-200 bg-stone-100/70 text-stone-600 font-semibold">
+                    <th className="py-3 px-4 whitespace-nowrap">尺寸規格 (高-深-長)</th>
+                    <th className="py-3 px-4 whitespace-nowrap">內附配件說明</th>
+                    <th className="py-3 px-4 text-right whitespace-nowrap">客製空屋售價</th>
+                    <th className="py-3 px-4 text-right whitespace-nowrap">到府安裝工資</th>
+                    <th className="py-3 px-4 text-center whitespace-nowrap">快捷試算</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
@@ -127,37 +181,37 @@ export const PriceCatalog: React.FC<PriceCatalogProps> = ({
                       key={item.dimensionCode}
                       className="hover:bg-amber-50/40 transition-colors"
                     >
-                      <td className="py-4 px-4 font-mono font-bold text-stone-900 text-sm">
+                      <td className="py-4 px-4 font-mono font-bold text-stone-900 text-sm whitespace-nowrap">
                         {item.dimensionCode}
-                        <span className="block text-[11px] font-normal text-stone-500">
-                          高{item.height} × 深{item.depth} × 長{item.length} cm
+                        <span className="block text-[11px] font-normal text-stone-500 whitespace-nowrap mt-0.5">
+                          高 {item.height} × 深 {item.depth} × 長 {item.length} cm
                         </span>
                       </td>
 
                       <td className="py-4 px-4 text-stone-600">
                         {item.bundledNote ? (
-                          <span className="inline-flex items-center gap-1 text-amber-900 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
+                          <span className="inline-flex items-center gap-1 text-amber-900 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60 whitespace-nowrap">
                             <Sparkles className="w-3 h-3 text-amber-700" />
                             {item.bundledNote}
                           </span>
                         ) : (
-                          <span className="text-stone-400">標準配置（可自由加裝）</span>
+                          <span className="text-stone-400 whitespace-nowrap">標準配置（可自由加裝）</span>
                         )}
                       </td>
 
-                      <td className="py-4 px-4 text-right font-mono font-bold text-base text-amber-900 tabular-nums">
+                      <td className="py-4 px-4 text-right font-mono font-bold text-base text-amber-900 tabular-nums whitespace-nowrap">
                         NT$ {item.price.toLocaleString()}
                       </td>
 
-                      <td className="py-4 px-4 text-right font-mono text-stone-600 tabular-nums">
+                      <td className="py-4 px-4 text-right font-mono text-stone-600 tabular-nums whitespace-nowrap">
                         NT$ {item.installFee.toLocaleString()}
                       </td>
 
-                      <td className="py-4 px-4 text-center">
+                      <td className="py-4 px-4 text-center whitespace-nowrap">
                         <button
                           type="button"
                           onClick={() => onSelectDimensionForEstimator(item.length, item.height)}
-                          className="px-2.5 py-1.5 text-xs font-semibold text-stone-800 bg-stone-100 hover:bg-stone-200 rounded-md transition-colors whitespace-nowrap"
+                          className="px-3 py-1.5 text-xs font-semibold text-stone-800 bg-stone-100 hover:bg-stone-200 rounded-md transition-colors whitespace-nowrap"
                         >
                           試算此規格
                         </button>
@@ -169,21 +223,11 @@ export const PriceCatalog: React.FC<PriceCatalogProps> = ({
             </div>
 
             {/* Note bar */}
-            <div className="p-4 bg-stone-50 border-t border-stone-200 text-xs text-stone-600 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Info className="w-4 h-4 text-amber-800 shrink-0" />
-                <span>
-                  工廠直寄<strong>【配送至一樓】（免運不包含偏遠地區還有離島）</strong> · 出貨前預組裝拍照確認 · 享 1 年保固（無電梯需爬樓梯搬運請提前報備加收樓層費）
-                </span>
-              </div>
-              <a
-                href={STORE_INFO.lineUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-amber-900 font-semibold hover:underline"
-              >
-                加 LINE 預約排單 &rarr;
-              </a>
+            <div className="p-4 bg-stone-50 border-t border-stone-200 text-xs text-stone-600 flex items-center gap-2">
+              <Info className="w-4 h-4 text-amber-800 shrink-0" />
+              <span>
+                配送至一樓（免運不含偏遠與離島）· 出貨前預組裝拍照確認 · 享 1 年保固（無電梯需爬樓梯搬運請提前報備）
+              </span>
             </div>
           </div>
 

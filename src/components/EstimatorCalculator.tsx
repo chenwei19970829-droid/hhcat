@@ -20,6 +20,7 @@ import {
   FileSpreadsheet,
   QrCode
 } from 'lucide-react';
+import { trackEvent } from '../utils/analytics';
 
 interface EstimatorCalculatorProps {
   initialLength?: number;
@@ -111,6 +112,7 @@ export const EstimatorCalculator: React.FC<EstimatorCalculatorProps> = ({
   const grandTotal = basePrice + depthExtraFee + heightExtraFee + installFee + travelFee + accessoryTotal;
 
   const handleQtyChange = (id: string, delta: number) => {
+    trackEvent('estimator_used', { action: 'accessory_change', accessory_id: id });
     setAccessoryQuantities((prev) => {
       const current = prev[id] || 0;
       const next = Math.max(0, current + delta);
@@ -246,7 +248,10 @@ ${
                   <button
                     key={h}
                     type="button"
-                    onClick={() => setSelectedHeight(h)}
+                    onClick={() => {
+                      setSelectedHeight(h);
+                      trackEvent('estimator_used', { action: 'height_select', height: h });
+                    }}
                     className={`py-2.5 text-xs font-medium rounded-xl border transition-all ${
                       selectedHeight === h
                         ? 'bg-amber-900 text-white border-amber-900 font-bold shadow-xs'
@@ -309,7 +314,10 @@ ${
                   <button
                     key={len}
                     type="button"
-                    onClick={() => setSelectedLength(len)}
+                    onClick={() => {
+                      setSelectedLength(len);
+                      trackEvent('estimator_used', { action: 'length_select', length: len });
+                    }}
                     className={`py-2.5 text-xs font-medium rounded-xl border transition-all ${
                       selectedLength === len
                         ? 'bg-amber-900 text-white border-amber-900 font-bold shadow-xs'
@@ -752,6 +760,13 @@ ${
                   href={lineChatUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() =>
+                    trackEvent('estimator_line_quote', {
+                      dimension: currentPriceItem.dimensionCode,
+                      total_twd: grandTotal,
+                      region: selectedRegion.name
+                    })
+                  }
                   className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 text-xs font-semibold text-white bg-[#06C755] hover:bg-[#05b34c] rounded-xl shadow-xs transition-colors"
                 >
                   <MessageCircle className="w-4 h-4" />

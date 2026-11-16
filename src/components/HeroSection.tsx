@@ -20,7 +20,6 @@ import {
   ChevronRight,
   Upload,
   Trash2,
-  Lock,
   Navigation,
   X,
   AlertCircle,
@@ -455,50 +454,38 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {isOwner ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleOpenUpload}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-lg transition-colors"
-                        title="上傳門店實景照片"
-                      >
-                        <Upload className="w-3 h-3" />
-                        <span>上傳</span>
-                      </button>
-                      {storefrontPhotos.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={handleDeleteCurrentPhoto}
-                          className="inline-flex items-center gap-1 px-2 py-1.5 text-[11px] font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                          title="刪除目前這張照片"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          <span>刪除</span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={logout}
-                        className="px-2 py-1.5 text-[11px] text-stone-500 hover:text-stone-800 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
-                        title="鎖定店主管理權限"
-                      >
-                        鎖定
-                      </button>
-                    </>
-                  ) : (
+                {isOwner && (
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
                       onClick={handleOpenUpload}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
-                      title="店主上傳/管理門店實景照"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-lg transition-colors"
+                      title="上傳門店實景照片"
                     >
-                      <Lock className="w-3 h-3 text-amber-800" />
-                      <span>店主管理</span>
+                      <Upload className="w-3 h-3" />
+                      <span>上傳</span>
                     </button>
-                  )}
-                </div>
+                    {storefrontPhotos.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteCurrentPhoto}
+                        className="inline-flex items-center gap-1 px-2 py-1.5 text-[11px] font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                        title="刪除目前這張照片"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>刪除</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={logout}
+                      className="px-2 py-1.5 text-[11px] text-stone-500 hover:text-stone-800 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
+                      title="鎖定店主管理權限"
+                    >
+                      鎖定
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Storefront Multi-Photo Auto-Advancing Carousel */}
@@ -510,7 +497,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               >
                 <img
                   src={currentPhoto.imageUrl}
-                  alt={currentPhoto.caption || '花花招財貓實體門店'}
+                  alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-實體門店實景（${currentPhoto.caption || '臺中市豐原區圓環西路97號'}）`}
                   className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.02]"
                   draggable={false}
                 />

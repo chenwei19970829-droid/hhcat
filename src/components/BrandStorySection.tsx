@@ -17,7 +17,6 @@ import {
   Clock,
   Instagram,
   Facebook,
-  Lock,
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
@@ -395,32 +394,16 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
               記錄花花從早產只有巴掌大、針筒一滴一滴餵奶，到現在圓滾滾成為店貓小老闆的日常點滴
             </p>
 
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  if (isOwner) {
-                    setIsUploadModalOpen(true);
-                  } else {
-                    setIsAuthModalOpen(true);
-                  }
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-amber-900 bg-amber-100/90 hover:bg-amber-200 border border-amber-300 rounded-xl transition-all shadow-xs"
-              >
-                {isOwner ? (
-                  <>
-                    <Upload className="w-4 h-4 text-amber-900" />
-                    <span>店主上傳花花成長紀錄</span>
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-3.5 h-3.5 text-amber-800" />
-                    <Upload className="w-3.5 h-3.5 text-amber-900" />
-                    <span>店主專屬 · 上傳花花成長紀錄</span>
-                  </>
-                )}
-              </button>
-              {isOwner && (
+            {isOwner && (
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsUploadModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-amber-900 bg-amber-100/90 hover:bg-amber-200 border border-amber-300 rounded-xl transition-all shadow-xs"
+                >
+                  <Upload className="w-4 h-4 text-amber-900" />
+                  <span>店主上傳花花成長紀錄</span>
+                </button>
                 <button
                   type="button"
                   onClick={logout}
@@ -429,8 +412,8 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
                 >
                   鎖定
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Timeline Grid (Max 12 initially) */}
@@ -455,7 +438,7 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
                 >
                   <img
                     src={photo.imageUrl}
-                    alt={photo.title}
+                    alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-店貓花花（${photo.title}）`}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                   />

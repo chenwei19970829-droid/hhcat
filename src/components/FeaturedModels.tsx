@@ -14,7 +14,6 @@ import {
   Trash2,
   Edit3,
   Upload,
-  Lock,
   ChevronDown,
   ChevronUp,
   X,
@@ -423,27 +422,17 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
             </p>
           </div>
 
-          {/* Action buttons: Filter & Store Owner Add */}
-          <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
-            <button
-              type="button"
-              onClick={handleOpenAddModal}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-all active:scale-95 shrink-0"
-            >
-              {isOwner ? (
-                <>
-                  <Plus className="w-4 h-4" />
-                  <span>店主新增/上傳款式</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-3.5 h-3.5 text-amber-200" />
-                  <Plus className="w-3.5 h-3.5 text-white" />
-                  <span>店主專用 · 新增款式</span>
-                </>
-              )}
-            </button>
-            {isOwner && (
+          {/* Action buttons: Store Owner Add (hidden from public visitors) */}
+          {isOwner && (
+            <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+              <button
+                type="button"
+                onClick={handleOpenAddModal}
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-all active:scale-95 shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>店主新增/上傳款式</span>
+              </button>
               <button
                 type="button"
                 onClick={logout}
@@ -452,8 +441,8 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
               >
                 鎖定
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Category Filter Controls: 全部尺寸、高90、高120、高150、高180 */}
@@ -549,7 +538,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
               >
                 <img
                   src={imgs[0] || model.image}
-                  alt={model.name}
+                  alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${model.dimensions.dimensionCode}cm（${model.name}）`}
                   className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                   loading="lazy"
                 />

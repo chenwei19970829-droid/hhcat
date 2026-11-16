@@ -17,7 +17,6 @@ import {
   AlertTriangle,
   Camera,
   CheckCircle,
-  Lock,
   Truck,
   MapPin,
   X,
@@ -413,27 +412,17 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
             </p>
           </div>
 
-          {/* Store Owner Upload Button */}
-          <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
-            <button
-              type="button"
-              onClick={handleOpenUploadModal}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-all active:scale-95"
-            >
-              {isOwner ? (
-                <>
-                  <Camera className="w-4 h-4" />
-                  <span>店主上傳門店現貨實拍</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-3.5 h-3.5 text-amber-200" />
-                  <Camera className="w-3.5 h-3.5 text-white" />
-                  <span>店主專用 · 上傳門店現貨實拍</span>
-                </>
-              )}
-            </button>
-            {isOwner && (
+          {/* Store Owner Upload Button (visible only when owner is authenticated) */}
+          {isOwner && (
+            <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={handleOpenUploadModal}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-all active:scale-95"
+              >
+                <Camera className="w-4 h-4" />
+                <span>店主上傳門店現貨實拍</span>
+              </button>
               <button
                 type="button"
                 onClick={logout}
@@ -442,8 +431,8 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
               >
                 鎖定
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Important In-Stock Shipping & Self-Pickup Disclaimer Banner */}
@@ -506,7 +495,7 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
                   <div className="relative aspect-4/3 bg-stone-100 overflow-hidden">
                     <img
                       src={allImgs[0] || item.mainImage}
-                      alt={item.title}
+                      alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${item.sizeTag}（${item.title}）`}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
 

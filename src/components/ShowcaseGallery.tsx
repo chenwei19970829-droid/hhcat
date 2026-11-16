@@ -6,7 +6,7 @@ import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
 import { useStoreOwner } from '../utils/adminAuth';
 import { StoreOwnerAuthModal } from './StoreOwnerAuthModal';
-import { Upload, Plus, Filter, Maximize2, Trash2, Edit3, CheckCircle, Image as ImageIcon, AlertCircle, Lock, ChevronDown, ChevronUp, Images } from 'lucide-react';
+import { Upload, Plus, Filter, Maximize2, Trash2, Edit3, CheckCircle, Image as ImageIcon, AlertCircle, ChevronDown, ChevronUp, Images } from 'lucide-react';
 
 interface ShowcaseGalleryProps {
   onOpenImageZoom?: (title: string, imageUrl: string, subtitle?: string) => void;
@@ -363,30 +363,20 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
           </div>
 
           {/* Action: Open Upload Modal (Restricted to Store Owner) */}
-          <div className="flex items-center gap-2 self-start md:self-auto shrink-0 z-10">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleOpenUpload();
-              }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
-            >
-              {isOwner ? (
-                <>
-                  <Plus className="w-4 h-4" />
-                  <span>店主上傳客製實品照</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-3.5 h-3.5 text-amber-200" />
-                  <Plus className="w-3.5 h-3.5 text-white" />
-                  <span>店主專用 · 上傳客製實品照</span>
-                </>
-              )}
-            </button>
-            {isOwner && (
+          {isOwner && (
+            <div className="flex items-center gap-2 self-start md:self-auto shrink-0 z-10">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleOpenUpload();
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>店主上傳客製實品照</span>
+              </button>
               <button
                 type="button"
                 onClick={logout}
@@ -395,8 +385,8 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
               >
                 鎖定
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Size Filter Pills / Segmented Bar */}
@@ -498,7 +488,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
                 <div className="relative aspect-4/3 bg-stone-100 overflow-hidden flex items-center justify-center p-2">
                   <img
                     src={imgs[0] || photo.imageUrl}
-                    alt={photo.title}
+                    alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${photo.dimensionsText}（${photo.title}）`}
                     className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                     onError={(e) => {

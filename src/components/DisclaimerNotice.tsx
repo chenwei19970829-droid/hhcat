@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, Wrench, Truck, ShieldCheck, AlertCircle, Video, CheckCircle } from 'lucide-react';
+import { Camera, Wrench, Truck, ShieldCheck, Video, CheckCircle } from 'lucide-react';
 
 export const DisclaimerNotice: React.FC = () => {
   return (
@@ -7,14 +7,14 @@ export const DisclaimerNotice: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto text-center mb-12">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-amber-900 bg-amber-500/10 border border-amber-600/20 mb-2">
-            <AlertCircle className="w-3.5 h-3.5 text-amber-800" />
-            <span>透明誠信 · 買家權益保障</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-800" />
+            <span>手工匠心工藝 · 買家安心保障</span>
           </div>
           <h2 className="font-serif-title text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
-            訂購須知 · 免責聲明與售後保固
+            訂購須知 · 售後保障
           </h2>
           <p className="text-sm text-stone-600 mt-2">
-            為維護您的寶貴權益，下單前請詳閱以下出貨檢驗、組裝建議、物流配送與 1 年保固政策
+            為讓毛孩家長買得安心、用得放心，下單前邀您了解我們的出貨預組裝檢驗、DIY 支援、專車物流與 1 年完整保固服務
           </p>
         </div>
 

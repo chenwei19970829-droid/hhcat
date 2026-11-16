@@ -80,7 +80,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
         <div className="flex-1 bg-stone-900/95 p-4 flex items-center justify-center overflow-auto min-h-[300px]">
           <img
             src={imageUrl}
-            alt={title}
+            alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${title}${subtitle ? `-${subtitle}` : ''}`}
             className="max-h-[72vh] w-auto max-w-full object-contain rounded shadow-lg select-none"
           />
         </div>

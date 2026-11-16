@@ -1,8 +1,14 @@
 import React from 'react';
 import { STORE_INFO } from '../data/catVillaData';
-import { Phone, MessageCircle, MapPin, ArrowUp } from 'lucide-react';
+import { Phone, MessageCircle, MapPin, ArrowUp, Lock } from 'lucide-react';
+import { useStoreOwner } from '../utils/adminAuth';
 
-export const Footer: React.FC = () => {
+interface FooterProps {
+  onOpenOwnerAuth?: () => void;
+}
+
+export const Footer: React.FC<FooterProps> = ({ onOpenOwnerAuth }) => {
+  const { isOwner, logout } = useStoreOwner();
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -114,7 +120,7 @@ export const Footer: React.FC = () => {
               </li>
               <li>
                 <a href="#disclaimer" className="hover:text-amber-400 transition-colors">
-                  訂購須知與 1 年保固
+                  訂購須知 · 售後保障
                 </a>
               </li>
               <li>
@@ -146,8 +152,31 @@ export const Footer: React.FC = () => {
 
         {/* Bottom Bar */}
         <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-500">
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-1">
             <span>© {new Date().getFullYear()} 花花招財貓 (Hua Hua Lucky Cat). 保留所有權利.</span>
+            {isOwner ? (
+              <button
+                type="button"
+                onClick={logout}
+                className="inline-flex items-center gap-1 text-[11px] text-amber-400/90 hover:text-amber-300 transition-colors"
+                title="鎖定並退出店主編輯模式"
+              >
+                <Lock className="w-3 h-3" />
+                <span>店主管理模式已開啟（點擊鎖定）</span>
+              </button>
+            ) : (
+              onOpenOwnerAuth && (
+                <button
+                  type="button"
+                  onClick={onOpenOwnerAuth}
+                  className="inline-flex items-center gap-1 text-[11px] text-stone-600 hover:text-stone-400 transition-colors"
+                  title="店主管理登入"
+                >
+                  <Lock className="w-2.5 h-2.5" />
+                  <span>店主入口</span>
+                </button>
+              )
+            )}
           </div>
 
           <button

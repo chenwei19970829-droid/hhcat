@@ -135,7 +135,7 @@ export const MultiPhotoLightbox: React.FC<MultiPhotoLightboxProps> = ({
         >
           <img
             src={currentImg}
-            alt={`${title} - 第 ${currentIndex + 1} 張`}
+            alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${title}${subtitle ? `-${subtitle}` : ''}-實拍第${currentIndex + 1}張`}
             className="max-h-[62vh] w-auto max-w-full object-contain rounded-xl shadow-2xl select-none transition-all duration-300"
             draggable={false}
           />

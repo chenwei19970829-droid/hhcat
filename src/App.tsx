@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { HeroSection } from './components/HeroSection';
 import { InStockSection } from './components/InStockSection';
@@ -21,9 +21,22 @@ import { LightboxModal } from './components/LightboxModal';
 import { OriginalMenuModal } from './components/OriginalMenuModal';
 import { Footer } from './components/Footer';
 import { MobileStickyBar } from './components/MobileStickyBar';
+import { StoreOwnerAuthModal } from './components/StoreOwnerAuthModal';
+import { useStoreOwner } from './utils/adminAuth';
 import { VillaModel } from './data/catVillaData';
 
 export default function App() {
+  const { isOwner } = useStoreOwner();
+  const [ownerAuthOpen, setOwnerAuthOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || isOwner) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('admin') === '1' || window.location.hash === '#owner') {
+      setOwnerAuthOpen(true);
+    }
+  }, [isOwner]);
+
   // Lightbox Modal State
   const [lightbox, setLightbox] = useState<{
     isOpen: boolean;
@@ -135,7 +148,7 @@ export default function App() {
           onOpenImageZoom={handleOpenImageZoom}
         />
 
-        {/* 6. Order Disclaimers & Warranty Notice (出貨預組裝拍照、工具提醒、物流送一樓、1年保固全程錄影) */}
+        {/* 6. Order Guidelines, Craftsmanship & Warranty (出貨預組裝拍照、工具提醒、物流送一樓、1年保固全程錄影) */}
         <DisclaimerNotice />
 
         {/* 7. Materials & Craftsmanship (天然松木無甲醛、高透安全壓克力、靜音五金、對流通風) */}
@@ -148,11 +161,19 @@ export default function App() {
         <ContactSection />
       </main>
 
-      {/* Footer with Business Info & Back-to-Top */}
-      <Footer />
+      {/* Footer with Business Info, Discreet Owner Portal & Back-to-Top */}
+      <Footer onOpenOwnerAuth={() => setOwnerAuthOpen(true)} />
 
       {/* Mobile Bottom Sticky Bar (Phone / LINE / Estimator) */}
       <MobileStickyBar onOpenEstimator={() => scrollToEstimator()} />
+
+      {/* Store Owner Auth Modal (triggered via Footer or ?admin=1) */}
+      <StoreOwnerAuthModal
+        isOpen={ownerAuthOpen}
+        onClose={() => setOwnerAuthOpen(false)}
+        onSuccess={() => setOwnerAuthOpen(false)}
+        actionTitle="解鎖店主管理與上傳編輯功能"
+      />
 
       {/* Lightbox Modal for Full Image Zoom */}
       <LightboxModal

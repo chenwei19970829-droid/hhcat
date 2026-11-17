@@ -4,9 +4,10 @@ import { Phone, MessageCircle, Menu, X, MapPin, QrCode } from 'lucide-react';
 
 interface NavbarProps {
   onOpenEstimator?: () => void;
+  onNavigateHome?: (hash?: string) => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = () => {
+export const Navbar: React.FC<NavbarProps> = ({ onNavigateHome }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showQrPopover, setShowQrPopover] = useState(false);
 
@@ -26,6 +27,10 @@ export const Navbar: React.FC<NavbarProps> = () => {
   const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     e.preventDefault();
     setMobileMenuOpen(false);
+    if (onNavigateHome) {
+      onNavigateHome(href);
+      return;
+    }
     const targetId = href.replace('#', '');
     const element = document.getElementById(targetId);
     if (element) {
@@ -40,7 +45,17 @@ export const Navbar: React.FC<NavbarProps> = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20 gap-8">
           {/* Zone 1: Brand Wordmark with Logo */}
-          <a href="#" className="flex items-center gap-3 shrink-0 group">
+          <a
+            href="/"
+            onClick={(e) => {
+              if (onNavigateHome) {
+                e.preventDefault();
+                setMobileMenuOpen(false);
+                onNavigateHome();
+              }
+            }}
+            className="flex items-center gap-3 shrink-0 group"
+          >
             <div className="w-12 h-12 rounded-xl bg-white p-0.5 border border-stone-200/90 shadow-sm group-hover:border-amber-700 transition-colors overflow-hidden flex items-center justify-center shrink-0">
               <img
                 src={STORE_INFO.logoImage || '/assets/aistudio/logo_6994c231.jpg'}

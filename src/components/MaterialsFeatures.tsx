@@ -90,6 +90,72 @@ export const MaterialsFeatures: React.FC = () => {
             );
           })}
         </div>
+
+        {/* Competitive Differentiation Comparison Table */}
+        <div className="mt-12 bg-white rounded-2xl border border-stone-200 p-6 sm:p-8 shadow-xs">
+          <div className="mb-5">
+            <div className="text-xs font-semibold text-amber-800 uppercase tracking-wider">
+              Craft Comparison · 選購避雷對照
+            </div>
+            <h3 className="font-serif-title text-xl font-bold text-stone-900 mt-1">
+              花花招財貓 1.5cm 純松木 vs 市售一般網購貓櫃
+            </h3>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs sm:text-sm">
+              <thead>
+                <tr className="border-b border-stone-200 text-stone-500">
+                  <th className="py-3 pr-4 font-semibold">對比項目</th>
+                  <th className="py-3 px-4 font-bold text-amber-950 bg-amber-50/70">
+                    花花招財貓（1.5cm 純實木客製）
+                  </th>
+                  <th className="py-3 pl-4 font-medium text-stone-500">
+                    市售平價網購／貼皮薄板貓籠
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                <tr>
+                  <td className="py-3.5 pr-4 font-semibold text-stone-800">板材真材實料</td>
+                  <td className="py-3.5 px-4 bg-amber-50/40 font-semibold text-stone-900">
+                    全純實木松木實測足 <span className="font-mono">1.5cm</span>，大貓跳躍不搖晃變形
+                  </td>
+                  <td className="py-3.5 pl-4 text-stone-500">
+                    常見 0.8–1.2cm 貼皮密度板或碎木壓合，易塌陷脫皮
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-3.5 pr-4 font-semibold text-stone-800">無毒防水安全</td>
+                  <td className="py-3.5 px-4 bg-amber-50/40 font-semibold text-stone-900">
+                    天然無甲醛原木＋微防水漆防潮塗裝，清潔擦拭不發霉
+                  </td>
+                  <td className="py-3.5 pl-4 text-stone-500">
+                    刺鼻黏膠甲醛味重，沾水或貓尿易膨脹起泡
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-3.5 pr-4 font-semibold text-stone-800">視野與防爆門片</td>
+                  <td className="py-3.5 px-4 bg-amber-50/40 font-semibold text-stone-900">
+                    高透耐磨安全壓克力門＋304 靜音緩衝鉸鏈，輕巧防碎
+                  </td>
+                  <td className="py-3.5 pl-4 text-stone-500">
+                    笨重易碎玻璃門或冰冷生鏽鐵籠，易夾傷或驚嚇毛孩
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-3.5 pr-4 font-semibold text-stone-800">實體門店與驗收</td>
+                  <td className="py-3.5 px-4 bg-amber-50/40 font-semibold text-stone-900">
+                    台中豐原實體門店可看木頭 + 出貨前預組裝拍照驗貨 + 1 年保固
+                  </td>
+                  <td className="py-3.5 pl-4 text-stone-500">
+                    純網拍無實體門店可摸實品，收到貨才開箱抽盲盒
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
   );

@@ -242,7 +242,7 @@ export const ContactSection: React.FC = () => {
               </div>
 
               <h4 className="font-serif-title font-bold text-stone-900 text-xl">
-                花花招財貓 · 實體門店到訪導引
+                花花招財貓 · 台中豐原實體門店預約體驗（看得到 1.5cm 真材實料）
               </h4>
 
               <div className="space-y-2 text-xs text-stone-600 leading-relaxed">
@@ -250,13 +250,13 @@ export const ContactSection: React.FC = () => {
                   <strong>門店地址：</strong>{STORE_INFO.address}（位於圓環西路主要幹道，門口路段臨停與周邊停車便利）
                 </p>
                 <p>
-                  <strong>開車前往：</strong>國道1號豐原交流道下，車程約 5-8 分鐘即可抵達。
+                  <strong>來店 3 大安心體驗：</strong>① 現場親手檢驗 1.5cm 純松木厚實度與無刺鼻味、② 門市現貨實品直接挑選比對尺寸、③ 一對一空間規劃與客製跳台動線建議。
                 </p>
                 <p>
-                  <strong>大眾運輸：</strong>可搭乘台鐵至「豐原車站」後轉搭公車或計程車約 5 分鐘抵達。
+                  <strong>開車前往：</strong>國道1號豐原交流道下，車程約 5-8 分鐘即可抵達；台鐵「豐原車站」轉乘約 5 分鐘。
                 </p>
                 <p className="text-amber-900 font-medium pt-1">
-                  ※ 門店為確保每位貓家長獲得最詳盡的一對一介紹，建議來訪前可先致電或 LINE 告知！
+                  ※ 店長常外出到府組裝，為確保每位貓家長獲得最詳盡的一對一介紹，來訪前請務必先致電或 LINE 預約避免跑空！
                 </p>
               </div>
 

@@ -37,6 +37,7 @@ interface HeroSectionProps {
   onOpenEstimator: () => void;
   onViewMenuImages: () => void;
   onOpenImageZoom?: (title: string, imageUrl: string, subtitle?: string) => void;
+  onNavigateToPath?: (path: string) => void;
 }
 
 const STOREFRONT_STORAGE_KEY = 'hhcat_storefront_photos_v1';
@@ -51,7 +52,8 @@ const DEFAULT_STOREFRONT_PHOTO: StorefrontPhotoItem = {
 
 export const HeroSection: React.FC<HeroSectionProps> = ({
   onOpenEstimator,
-  onViewMenuImages
+  onViewMenuImages,
+  onNavigateToPath
 }) => {
   const { isOwner, logout } = useStoreOwner();
 
@@ -349,62 +351,150 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               </div>
             </div>
 
-            <h1 className="font-serif-title text-lg min-[380px]:text-xl sm:text-3xl lg:text-4xl font-bold text-stone-900 tracking-tight leading-snug sm:leading-[1.35]">
-              <span className="block">捨棄華麗包裝，只留頂級好木頭，</span>
-              <span className="block text-amber-900 mt-1 sm:mt-1.5">為貓貓築起最安心的專屬城堡</span>
+            <h1 className="font-serif-title text-xl min-[380px]:text-2xl sm:text-3xl lg:text-4xl font-bold text-stone-900 tracking-tight leading-snug sm:leading-[1.35]">
+              <span className="block">
+                <span className="inline-block whitespace-nowrap">純天然松木</span>
+                <span className="mx-1.5 text-amber-800/70" aria-hidden="true">·</span>
+                <span className="inline-block whitespace-nowrap">無甲醛實作</span>
+              </span>
+              <span className="block text-amber-900 mt-1.5">
+                <span className="inline-block whitespace-nowrap">台中豐原實體店</span>
+                <span className="inline-block whitespace-nowrap">客製貓別墅</span>
+              </span>
             </h1>
 
-            {/* Core Craft & Service Highlights (Concise, Non-repetitive) */}
-            <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-4 sm:p-5 space-y-3.5 max-w-2xl shadow-xs">
-              <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-amber-950">
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-amber-800 text-white text-xs">★</span>
-                <span>堅持做自己也敢讓花花住的好木頭</span>
+            <ul className="space-y-1.5 text-xs sm:text-sm text-stone-600 leading-relaxed max-w-2xl">
+              <li className="flex items-start gap-2">
+                <span className="text-amber-800 font-bold shrink-0">•</span>
+                <span>
+                  <strong className="text-stone-900 inline-block whitespace-nowrap">足厚 1.5cm 純松木</strong>：穩固承重不搖晃，拒絕劣質貼皮薄板
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-amber-800 font-bold shrink-0">•</span>
+                <span>
+                  <strong className="text-stone-900 inline-block whitespace-nowrap">微防水漆＋安全壓克力</strong>：防潮易擦拭，防爆高透不夾傷
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-amber-800 font-bold shrink-0">•</span>
+                <span>
+                  <strong className="text-stone-900 inline-block whitespace-nowrap">門店看樣＋預組裝實拍</strong>：現場摸得到木料，客製出貨先驗收
+                </span>
+              </li>
+            </ul>
+
+            {/* Core Craft & Service Highlights */}
+            <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-4 sm:p-5 space-y-4 max-w-2xl shadow-xs">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm sm:text-base font-bold text-amber-950">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-amber-800 text-white text-xs shrink-0">★</span>
+                    <span>堅持做自己也敢讓花花住的好木頭</span>
+                  </div>
+                  {onNavigateToPath && (
+                    <a
+                      href="/guides/solid-wood-craft"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onNavigateToPath('/guides/solid-wood-craft');
+                      }}
+                      className="text-xs font-semibold text-amber-900 hover:underline whitespace-nowrap shrink-0"
+                    >
+                      1.5cm 實木 vs 市售薄板差異 →
+                    </a>
+                  )}
+                </div>
+
+                <p className="text-xs sm:text-[13px] text-stone-700 leading-relaxed">
+                  我們深信，一座好的貓別墅不只是寵物家具，更是完美融入居家裝潢的美學延伸，以及守護毛孩健康的溫暖堡壘。
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-[13px] text-stone-700">
-                <div className="bg-white/85 p-3.5 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
+                <div className="bg-white/90 p-3.5 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
                   <ShieldCheck className="w-4 h-4 text-amber-800 shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-stone-900 block font-semibold">天然松木無甲醛・1.5cm 實木板</strong>
-                    <span className="text-stone-600 text-xs leading-relaxed block mt-1">
-                      微防水防潮塗裝搭配高透安全壓克力門片，穩固耐用不搖晃。
+                    <strong className="text-stone-900 block font-semibold leading-snug">
+                      1.5cm 實木的厚實守護，告別搖晃不安
+                    </strong>
+                    <span className="text-stone-600 text-xs leading-relaxed block mt-1.5">
+                      嚴選<span className="font-medium text-stone-800 whitespace-nowrap">天然松木無甲醛</span>，以 <span className="font-medium text-stone-800 whitespace-nowrap">1.5cm 實木板</span>打造卓越承重力，毛孩跑跳也<span className="font-medium text-stone-800 whitespace-nowrap">穩固耐用不搖晃</span>；搭配微防水防潮塗裝與高透安全壓克力門片，兼顧防護與透視美感。
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-white/85 p-3.5 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
+                <div className="bg-white/90 p-3.5 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
                   <Hammer className="w-4 h-4 text-amber-800 shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-stone-900 block font-semibold">1:1 依圖客製・預留精準孔位</strong>
-                    <span className="text-stone-600 text-xs leading-relaxed block mt-1">
-                      長寬高與內部跳台全客製，特別訂製款出貨前提供實拍確認。
+                    <strong className="text-stone-900 block font-semibold leading-snug">
+                      專業客製，完美契合您的想像
+                    </strong>
+                    <span className="text-stone-600 text-xs leading-relaxed block mt-1.5">
+                      提供高度、深度、長度與內部跳台<span className="font-medium text-stone-800 whitespace-nowrap">全客製服務</span>，貼合居家動線；選擇特別訂製款的家長，出貨前更提供<span className="font-medium text-stone-800 whitespace-nowrap">專屬實拍確認</span>，安心見證每個細節。
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-white/85 p-3.5 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
+                <div className="bg-white/90 p-3.5 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
                   <Truck className="w-4 h-4 text-amber-800 shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-stone-900 block font-semibold">工廠直寄台灣免運配送</strong>
-                    <span className="text-stone-600 text-xs leading-relaxed block mt-1">
-                      新竹物流加固宅配至一樓（偏遠及離島除外），也可預約到府安裝。
+                    <strong className="text-stone-900 block font-semibold leading-snug">
+                      尊榮配送與安心承諾
+                    </strong>
+                    <span className="text-stone-600 text-xs leading-relaxed block mt-1.5">
+                      提供<span className="font-medium text-stone-800 whitespace-nowrap">工廠直寄台灣免運</span>，透過新竹物流加固宅配至一樓，亦可輕鬆預約<span className="font-medium text-stone-800 whitespace-nowrap">到府安裝服務</span>（偏遠及離島除外）。
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-white/85 p-3.5 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
+                <div className="bg-white/90 p-3.5 rounded-xl border border-amber-200/60 flex items-start gap-2.5 shadow-2xs">
                   <Sparkles className="w-4 h-4 text-amber-800 shrink-0 mt-0.5" />
                   <div>
-                    <strong className="text-stone-900 block font-semibold">1 年保固・專屬組裝教學</strong>
-                    <span className="text-stone-600 text-xs leading-relaxed block mt-1">
-                      憑拆箱全程錄影享非人為損壞補件，並附店長親自示範教學影片。
+                    <strong className="text-stone-900 block font-semibold leading-snug">
+                      頂級質感與售後保障
+                    </strong>
+                    <span className="text-stone-600 text-xs leading-relaxed block mt-1.5">
+                      歡迎蒞臨<span className="font-medium text-stone-800 whitespace-nowrap">台中豐原實體門店</span>感受<span className="font-medium text-stone-800 whitespace-nowrap">看得到摸得到</span>的溫潤工藝；
+                      <br />
+                      拆箱全程錄影即享非人為損壞 <span className="font-medium text-stone-800 whitespace-nowrap">1 年免費補件</span>。
                     </span>
                   </div>
+                </div>
+              </div>
+
+              <div className="pt-1 border-t border-amber-200/70 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-950">
+                <span>
+                  立即探索更多客製靈感，為毛孩打造理想之境
+                </span>
+                <div className="flex items-center gap-3 shrink-0">
+                  <a
+                    href="#models"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      document.getElementById('models')?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="font-semibold text-amber-900 hover:underline whitespace-nowrap"
+                  >
+                    瀏覽精選款式 →
+                  </a>
+                  {onNavigateToPath && (
+                    <a
+                      href="/taichung-showroom"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onNavigateToPath('/taichung-showroom');
+                      }}
+                      className="font-semibold text-stone-800 hover:text-amber-900 hover:underline whitespace-nowrap"
+                    >
+                      預約豐原門市體驗 →
+                    </a>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* CTAs (Streamlined: Single Primary LINE CTA + Estimator + Paper Menu) */}
+            {/* CTAs (Streamlined: Single Primary LINE CTA + Estimator + Showroom + Paper Menu) */}
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <a
                 href={STORE_INFO.lineUrl}
@@ -422,8 +512,22 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 className="inline-flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-semibold text-stone-800 bg-white hover:bg-stone-50 border border-stone-300 rounded-xl shadow-xs hover:border-amber-800 transition-all active:scale-[0.98]"
               >
                 <Calculator className="w-4 h-4 text-amber-800" />
-                <span>線上即時試算估價</span>
+                <span>30秒試算客製報價</span>
               </button>
+
+              {onNavigateToPath && (
+                <a
+                  href="/taichung-showroom"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onNavigateToPath('/taichung-showroom');
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-3.5 text-xs font-semibold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>預約豐原店看實木</span>
+                </a>
+              )}
 
               <button
                 type="button"
@@ -431,7 +535,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 className="inline-flex items-center justify-center gap-1.5 px-3 py-3.5 text-xs font-semibold text-stone-600 hover:text-stone-900 transition-colors"
               >
                 <Eye className="w-3.5 h-3.5 text-stone-400" />
-                <span>查看門店原裝價目單 (5張)</span>
+                <span>查看原裝價目單 (5張)</span>
               </button>
             </div>
           </div>

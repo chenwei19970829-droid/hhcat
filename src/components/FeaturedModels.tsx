@@ -24,13 +24,15 @@ import {
 interface FeaturedModelsProps {
   onSelectForQuote: (model: VillaModel) => void;
   onOpenImageZoom: (imageTitle: string, imageUrl: string, subtitle?: string) => void;
+  onOpenModelPage?: (model: VillaModel) => void;
 }
 
 const STORAGE_KEY = 'hhcat_featured_custom_models_v2';
 const DELETED_MODELS_KEY = 'hhcat_deleted_models_ids_v1';
 
 export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
-  onSelectForQuote
+  onSelectForQuote,
+  onOpenModelPage
 }) => {
   const { isOwner, logout } = useStoreOwner();
   const [filter, setFilter] = useState<'all' | '90' | '120' | '150' | '180'>('all');
@@ -597,7 +599,18 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                 <div>
                   <div className="flex items-baseline justify-between gap-2">
                     <h3 className="font-serif-title font-bold text-stone-900 text-lg group-hover:text-amber-900 transition-colors">
-                      {model.name}
+                      <a
+                        href={`/villa/${model.id}`}
+                        onClick={(e) => {
+                          if (onOpenModelPage) {
+                            e.preventDefault();
+                            onOpenModelPage(model);
+                          }
+                        }}
+                        className="hover:underline"
+                      >
+                        {model.name}
+                      </a>
                     </h3>
                     <span className="text-xs text-stone-500 font-medium whitespace-nowrap">
                       {model.heightGroupLabel}
@@ -687,20 +700,19 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                       <span>帶入試算</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        openLightbox(
-                          model.name,
-                          imgs,
-                          `規格：${model.dimensions.dimensionCode}（高${model.dimensions.height} x 深${model.dimensions.depth} x 長${model.dimensions.length} cm）`
-                        )
-                      }
+                    <a
+                      href={`/villa/${model.id}`}
+                      onClick={(e) => {
+                        if (onOpenModelPage) {
+                          e.preventDefault();
+                          onOpenModelPage(model);
+                        }
+                      }}
                       className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-lg shadow-xs transition-colors"
                     >
                       <Images className="w-3.5 h-3.5" />
-                      <span>看細節{imgs.length > 1 ? `(${imgs.length}張)` : '大圖'}</span>
-                    </button>
+                      <span>規格與加購細節</span>
+                    </a>
                   </div>
                 </div>
               </div>

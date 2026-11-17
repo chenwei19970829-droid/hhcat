@@ -404,11 +404,14 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
               <PackageCheck className="w-4 h-4 text-amber-900" />
               <span>Taichung Fengyuan Store · 門市現貨實拍區</span>
             </div>
-            <h2 className="font-serif-title text-2xl sm:text-4xl font-bold text-stone-900 tracking-tight">
-              現貨實拍展示，拒絕修圖，滿意直接帶走！
+            <h2 className="font-serif-title text-xl min-[380px]:text-2xl sm:text-4xl font-bold text-stone-900 tracking-tight leading-snug">
+              <span className="inline-block whitespace-nowrap">門市現貨 · 零修圖實拍</span>
+              <span className="hidden sm:inline mx-2 text-stone-300" aria-hidden="true">/</span>
+              <span className="block sm:inline text-amber-900 mt-0.5 sm:mt-0 whitespace-nowrap">現場滿意 · 免等帶回家</span>
             </h2>
-            <p className="text-sm sm:text-base text-stone-700 mt-2.5 max-w-3xl leading-relaxed font-medium">
-              純實木別墅製作費時，門市現貨更是搶手。這裡展示目前在台中豐原店內的現成款式，看中哪一款？別猶豫，因為下一秒可能就被其他貓奴帶回家了！
+            <p className="text-xs sm:text-base text-stone-700 mt-2.5 max-w-2xl leading-relaxed font-medium">
+              <span className="inline-block">台中豐原店內已組裝完畢的實木現貨，</span>
+              <span className="inline-block">看中即可現場自取或叫車載回，免去等待訂製工期。</span>
             </p>
           </div>
 

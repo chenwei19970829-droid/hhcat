@@ -5,12 +5,32 @@ import { useStoreOwner } from '../utils/adminAuth';
 
 interface FooterProps {
   onOpenOwnerAuth?: () => void;
+  onNavigateHome?: (hash?: string) => void;
+  onNavigateToPath?: (path: string) => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onOpenOwnerAuth }) => {
+export const Footer: React.FC<FooterProps> = ({
+  onOpenOwnerAuth,
+  onNavigateHome,
+  onNavigateToPath
+}) => {
   const { isOwner, logout } = useStoreOwner();
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleHashLink = (e: React.MouseEvent<HTMLAnchorElement>, hash: string) => {
+    if (onNavigateHome) {
+      e.preventDefault();
+      onNavigateHome(hash);
+    }
+  };
+
+  const handleRouteLink = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
+    if (onNavigateToPath) {
+      e.preventDefault();
+      onNavigateToPath(path);
+    }
   };
 
   return (
@@ -84,47 +104,47 @@ export const Footer: React.FC<FooterProps> = ({ onOpenOwnerAuth }) => {
             </h4>
             <ul className="space-y-2 text-xs text-stone-400">
               <li>
-                <a href="#models" className="hover:text-amber-400 transition-colors">
+                <a href="/#models" onClick={(e) => handleHashLink(e, '#models')} className="hover:text-amber-400 transition-colors">
                   精選貓別墅款式 (A-Z款)
                 </a>
               </li>
               <li>
-                <a href="#story" className="hover:text-amber-400 transition-colors">
+                <a href="/guides/solid-wood-craft" onClick={(e) => handleRouteLink(e, '/guides/solid-wood-craft')} className="hover:text-amber-400 transition-colors">
+                  1.5cm 純實木 vs 市售薄板工藝指南
+                </a>
+              </li>
+              <li>
+                <a href="/taichung-showroom" onClick={(e) => handleRouteLink(e, '/taichung-showroom')} className="hover:text-amber-400 transition-colors">
+                  台中豐原實體門店預約體驗
+                </a>
+              </li>
+              <li>
+                <a href="/#story" onClick={(e) => handleHashLink(e, '#story')} className="hover:text-amber-400 transition-colors">
                   品牌故事與花花寫真
                 </a>
               </li>
               <li>
-                <a href="#showcase" className="hover:text-amber-400 transition-colors">
+                <a href="/#showcase" onClick={(e) => handleHashLink(e, '#showcase')} className="hover:text-amber-400 transition-colors">
                   客製實品相冊 (依尺寸檢索)
                 </a>
               </li>
               <li>
-                <a href="#catalog" className="hover:text-amber-400 transition-colors">
+                <a href="/#catalog" onClick={(e) => handleHashLink(e, '#catalog')} className="hover:text-amber-400 transition-colors">
                   門店標準報價單
                 </a>
               </li>
               <li>
-                <a href="#estimator" className="hover:text-amber-400 transition-colors">
+                <a href="/#estimator" onClick={(e) => handleHashLink(e, '#estimator')} className="hover:text-amber-400 transition-colors">
                   線上即時估價試算機
                 </a>
               </li>
               <li>
-                <a href="#materials" className="hover:text-amber-400 transition-colors">
-                  純實木1.5cm與壓克力特色
-                </a>
-              </li>
-              <li>
-                <a href="#sizeguide" className="hover:text-amber-400 transition-colors">
-                  多貓家庭尺寸選購指南
-                </a>
-              </li>
-              <li>
-                <a href="#disclaimer" className="hover:text-amber-400 transition-colors">
+                <a href="/#disclaimer" onClick={(e) => handleHashLink(e, '#disclaimer')} className="hover:text-amber-400 transition-colors">
                   訂購須知 · 售後保障
                 </a>
               </li>
               <li>
-                <a href="#faq" className="hover:text-amber-400 transition-colors">
+                <a href="/#faq" onClick={(e) => handleHashLink(e, '#faq')} className="hover:text-amber-400 transition-colors">
                   常見問題與到府安裝
                 </a>
               </li>

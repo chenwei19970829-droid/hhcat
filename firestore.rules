@@ -7,8 +7,295 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
     function isValidId(id) {
       return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    function isStoreOwner() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() == 'chenwei19970829@gmail.com';
+    }
+
+    function isValidDateId(dateId) {
+      return dateId is string
+        && dateId.size() == 10
+        && dateId.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function isValidPeriodId(periodId) {
+      return periodId is string
+        && periodId.size() >= 6
+        && periodId.size() <= 16
+        && periodId.matches('^(w_[0-9]{4}-[0-9]{2}-[0-9]{2}|m_[0-9]{4}-[0-9]{2}|y_[0-9]{4})$');
+    }
+
+    function isValidModelStatId(statId) {
+      return statId is string
+        && statId.size() >= 12
+        && statId.size() <= 80
+        && statId.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}_[a-zA-Z0-9_-]+$');
+    }
+
+    function isValidStepOnCreate(data, key) {
+      return !(key in data) || (data[key] is int && data[key] >= 0 && data[key] <= 1);
+    }
+
+    function isValidStepOnUpdate(key) {
+      return !(key in incoming().diff(existing()).affectedKeys())
+        || (
+          incoming()[key] is int && (
+            (!(key in existing()) && incoming()[key] >= 0 && incoming()[key] <= 1)
+            || ((key in existing()) && incoming()[key] >= existing()[key] && incoming()[key] <= existing()[key] + 1)
+          )
+        );
+    }
+
+    function allAnalyticsCounterStepsValidOnCreate(data) {
+      return isValidStepOnCreate(data, 'uniqueVisitors')
+        && isValidStepOnCreate(data, 'pageViews')
+        && isValidStepOnCreate(data, 'productPageViews')
+        && isValidStepOnCreate(data, 'showroomPageViews')
+        && isValidStepOnCreate(data, 'craftGuideViews')
+        && isValidStepOnCreate(data, 'estimatorUsers')
+        && isValidStepOnCreate(data, 'estimatorSessions')
+        && isValidStepOnCreate(data, 'estimatorActions')
+        && isValidStepOnCreate(data, 'estimatorCopies')
+        && isValidStepOnCreate(data, 'lineQuotes')
+        && isValidStepOnCreate(data, 'phoneClicks')
+        && isValidStepOnCreate(data, 'qrOpens')
+        && isValidStepOnCreate(data, 'deviceMobile')
+        && isValidStepOnCreate(data, 'deviceDesktop')
+        && isValidStepOnCreate(data, 'srcSearch')
+        && isValidStepOnCreate(data, 'srcSocial')
+        && isValidStepOnCreate(data, 'srcDirect');
+    }
+
+    function allAnalyticsCounterStepsValidOnUpdate() {
+      return isValidStepOnUpdate('uniqueVisitors')
+        && isValidStepOnUpdate('pageViews')
+        && isValidStepOnUpdate('productPageViews')
+        && isValidStepOnUpdate('showroomPageViews')
+        && isValidStepOnUpdate('craftGuideViews')
+        && isValidStepOnUpdate('estimatorUsers')
+        && isValidStepOnUpdate('estimatorSessions')
+        && isValidStepOnUpdate('estimatorActions')
+        && isValidStepOnUpdate('estimatorCopies')
+        && isValidStepOnUpdate('lineQuotes')
+        && isValidStepOnUpdate('phoneClicks')
+        && isValidStepOnUpdate('qrOpens')
+        && isValidStepOnUpdate('deviceMobile')
+        && isValidStepOnUpdate('deviceDesktop')
+        && isValidStepOnUpdate('srcSearch')
+        && isValidStepOnUpdate('srcSocial')
+        && isValidStepOnUpdate('srcDirect');
+    }
+
+    function isValidDailyCreate(dateId) {
+      return incoming().keys().hasAll(['date', 'updatedAt'])
+        && incoming().keys().hasOnly([
+          'date',
+          'updatedAt',
+          'uniqueVisitors',
+          'pageViews',
+          'productPageViews',
+          'showroomPageViews',
+          'craftGuideViews',
+          'estimatorUsers',
+          'estimatorSessions',
+          'estimatorActions',
+          'estimatorCopies',
+          'lineQuotes',
+          'phoneClicks',
+          'qrOpens',
+          'deviceMobile',
+          'deviceDesktop',
+          'srcSearch',
+          'srcSocial',
+          'srcDirect'
+        ])
+        && incoming().date == dateId
+        && incoming().updatedAt == request.time
+        && allAnalyticsCounterStepsValidOnCreate(incoming());
+    }
+
+    function isValidDailyUpdate(dateId) {
+      return incoming().keys().hasOnly([
+          'date',
+          'updatedAt',
+          'uniqueVisitors',
+          'pageViews',
+          'productPageViews',
+          'showroomPageViews',
+          'craftGuideViews',
+          'estimatorUsers',
+          'estimatorSessions',
+          'estimatorActions',
+          'estimatorCopies',
+          'lineQuotes',
+          'phoneClicks',
+          'qrOpens',
+          'deviceMobile',
+          'deviceDesktop',
+          'srcSearch',
+          'srcSocial',
+          'srcDirect'
+        ])
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'updatedAt',
+          'uniqueVisitors',
+          'pageViews',
+          'productPageViews',
+          'showroomPageViews',
+          'craftGuideViews',
+          'estimatorUsers',
+          'estimatorSessions',
+          'estimatorActions',
+          'estimatorCopies',
+          'lineQuotes',
+          'phoneClicks',
+          'qrOpens',
+          'deviceMobile',
+          'deviceDesktop',
+          'srcSearch',
+          'srcSocial',
+          'srcDirect'
+        ])
+        && incoming().date == existing().date
+        && incoming().date == dateId
+        && incoming().updatedAt == request.time
+        && allAnalyticsCounterStepsValidOnUpdate();
+    }
+
+    function isValidPeriodCreate(periodId) {
+      return incoming().keys().hasAll(['periodType', 'periodKey', 'updatedAt'])
+        && incoming().keys().hasOnly([
+          'periodType',
+          'periodKey',
+          'updatedAt',
+          'uniqueVisitors',
+          'pageViews',
+          'productPageViews',
+          'showroomPageViews',
+          'craftGuideViews',
+          'estimatorUsers',
+          'estimatorSessions',
+          'estimatorActions',
+          'estimatorCopies',
+          'lineQuotes',
+          'phoneClicks',
+          'qrOpens',
+          'deviceMobile',
+          'deviceDesktop',
+          'srcSearch',
+          'srcSocial',
+          'srcDirect'
+        ])
+        && incoming().periodType in ['week', 'month', 'year']
+        && incoming().periodKey is string
+        && incoming().periodKey.size() >= 4
+        && incoming().periodKey.size() <= 10
+        && (
+          (incoming().periodType == 'week' && periodId == 'w_' + incoming().periodKey)
+          || (incoming().periodType == 'month' && periodId == 'm_' + incoming().periodKey)
+          || (incoming().periodType == 'year' && periodId == 'y_' + incoming().periodKey)
+        )
+        && incoming().updatedAt == request.time
+        && allAnalyticsCounterStepsValidOnCreate(incoming());
+    }
+
+    function isValidPeriodUpdate(periodId) {
+      return incoming().keys().hasOnly([
+          'periodType',
+          'periodKey',
+          'updatedAt',
+          'uniqueVisitors',
+          'pageViews',
+          'productPageViews',
+          'showroomPageViews',
+          'craftGuideViews',
+          'estimatorUsers',
+          'estimatorSessions',
+          'estimatorActions',
+          'estimatorCopies',
+          'lineQuotes',
+          'phoneClicks',
+          'qrOpens',
+          'deviceMobile',
+          'deviceDesktop',
+          'srcSearch',
+          'srcSocial',
+          'srcDirect'
+        ])
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'updatedAt',
+          'uniqueVisitors',
+          'pageViews',
+          'productPageViews',
+          'showroomPageViews',
+          'craftGuideViews',
+          'estimatorUsers',
+          'estimatorSessions',
+          'estimatorActions',
+          'estimatorCopies',
+          'lineQuotes',
+          'phoneClicks',
+          'qrOpens',
+          'deviceMobile',
+          'deviceDesktop',
+          'srcSearch',
+          'srcSocial',
+          'srcDirect'
+        ])
+        && incoming().periodType == existing().periodType
+        && incoming().periodKey == existing().periodKey
+        && (
+          (existing().periodType == 'week' && periodId == 'w_' + existing().periodKey)
+          || (existing().periodType == 'month' && periodId == 'm_' + existing().periodKey)
+          || (existing().periodType == 'year' && periodId == 'y_' + existing().periodKey)
+        )
+        && incoming().updatedAt == request.time
+        && allAnalyticsCounterStepsValidOnUpdate();
+    }
+
+    function isValidModelStatCreate(statId) {
+      return incoming().keys().hasAll(['date', 'modelId', 'modelName', 'updatedAt'])
+        && incoming().keys().hasOnly(['date', 'modelId', 'modelName', 'views', 'lineQuotes', 'updatedAt'])
+        && incoming().date is string
+        && isValidDateId(incoming().date)
+        && incoming().modelId is string
+        && incoming().modelId.size() > 0
+        && incoming().modelId.size() <= 64
+        && incoming().modelId.matches('^[a-zA-Z0-9_-]+$')
+        && statId == incoming().date + '_' + incoming().modelId
+        && incoming().modelName is string
+        && incoming().modelName.size() > 0
+        && incoming().modelName.size() <= 100
+        && incoming().updatedAt == request.time
+        && isValidStepOnCreate(incoming(), 'views')
+        && isValidStepOnCreate(incoming(), 'lineQuotes');
+    }
+
+    function isValidModelStatUpdate(statId) {
+      return incoming().keys().hasOnly(['date', 'modelId', 'modelName', 'views', 'lineQuotes', 'updatedAt'])
+        && incoming().diff(existing()).affectedKeys().hasOnly(['modelName', 'views', 'lineQuotes', 'updatedAt'])
+        && incoming().date == existing().date
+        && incoming().modelId == existing().modelId
+        && statId == incoming().date + '_' + incoming().modelId
+        && incoming().modelName is string
+        && incoming().modelName.size() > 0
+        && incoming().modelName.size() <= 100
+        && incoming().updatedAt == request.time
+        && isValidStepOnUpdate('views')
+        && isValidStepOnUpdate('lineQuotes');
     }
 
     // 1. Featured Models Collection (Public Read & List, Validated Write)
@@ -34,6 +321,29 @@ service cloud.firestore {
       allow read, list: if true;
       allow create, update, delete: if isValidId(photoId);
     }
+
+    // 5. Daily Analytics Counters (Owner Read Only, Public +1 Increment Only)
+    match /analyticsDaily/{dateId} {
+      allow get, list: if isStoreOwner();
+      allow create: if isValidDateId(dateId) && isValidDailyCreate(dateId);
+      allow update: if isValidDateId(dateId) && isValidDailyUpdate(dateId);
+      allow delete: if false;
+    }
+
+    // 6. Deduplicated Weekly / Monthly / Yearly Period Counters (Owner Read Only, Public +1 Increment Only)
+    match /analyticsPeriods/{periodId} {
+      allow get, list: if isStoreOwner();
+      allow create: if isValidPeriodId(periodId) && isValidPeriodCreate(periodId);
+      allow update: if isValidPeriodId(periodId) && isValidPeriodUpdate(periodId);
+      allow delete: if false;
+    }
+
+    // 7. Daily Per-Model Analytics Counters (Owner Read Only, Public +1 Increment Only)
+    match /analyticsModelDaily/{statId} {
+      allow get, list: if isStoreOwner();
+      allow create: if isValidModelStatId(statId) && isValidModelStatCreate(statId);
+      allow update: if isValidModelStatId(statId) && isValidModelStatUpdate(statId);
+      allow delete: if false;
+    }
   }
 }
-

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { STORE_INFO } from '../data/catVillaData';
 import { Phone, MessageCircle, Menu, X, MapPin, QrCode } from 'lucide-react';
+import { trackEvent } from '../utils/analytics';
 
 interface NavbarProps {
   onOpenEstimator?: () => void;
@@ -91,7 +92,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigateHome }) => {
           <div className="hidden sm:flex items-center gap-2.5 shrink-0 relative">
             <button
               type="button"
-              onClick={() => setShowQrPopover(!showQrPopover)}
+              onClick={() => {
+                const next = !showQrPopover;
+                setShowQrPopover(next);
+                if (next) trackEvent('qr_open', { source: 'navbar' });
+              }}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200/80 border border-stone-200 rounded-lg transition-colors"
               title="手機掃碼加 LINE"
             >

@@ -1,16 +1,19 @@
 import React from 'react';
 import { STORE_INFO } from '../data/catVillaData';
-import { Phone, MessageCircle, MapPin, ArrowUp, Lock } from 'lucide-react';
+import { Phone, MessageCircle, MapPin, ArrowUp, Lock, BarChart3 } from 'lucide-react';
 import { useStoreOwner } from '../utils/adminAuth';
+import { signOutStoreOwner } from '../firebase';
 
 interface FooterProps {
   onOpenOwnerAuth?: () => void;
+  onOpenAnalytics?: () => void;
   onNavigateHome?: (hash?: string) => void;
   onNavigateToPath?: (path: string) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onOpenOwnerAuth,
+  onOpenAnalytics,
   onNavigateHome,
   onNavigateToPath
 }) => {
@@ -175,26 +178,55 @@ export const Footer: React.FC<FooterProps> = ({
           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-1">
             <span>© {new Date().getFullYear()} 花花招財貓 (Hua Hua Lucky Cat). 保留所有權利.</span>
             {isOwner ? (
-              <button
-                type="button"
-                onClick={logout}
-                className="inline-flex items-center gap-1 text-[11px] text-amber-400/90 hover:text-amber-300 transition-colors"
-                title="鎖定並退出店主編輯模式"
-              >
-                <Lock className="w-3 h-3" />
-                <span>店主管理模式已開啟（點擊鎖定）</span>
-              </button>
-            ) : (
-              onOpenOwnerAuth && (
+              <div className="inline-flex flex-wrap items-center gap-3">
+                {onOpenAnalytics && (
+                  <button
+                    type="button"
+                    onClick={onOpenAnalytics}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 hover:text-amber-200 transition-colors"
+                    title="開啟網站每日 / 每週 / 每月觀看紀錄與計算機統計"
+                  >
+                    <BarChart3 className="w-3 h-3" />
+                    <span>網站觀看紀錄</span>
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={onOpenOwnerAuth}
-                  className="inline-flex items-center gap-1 text-[11px] text-stone-600 hover:text-stone-400 transition-colors"
-                  title="店主管理登入"
+                  onClick={() => {
+                    logout();
+                    void signOutStoreOwner();
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] text-amber-400/90 hover:text-amber-300 transition-colors"
+                  title="鎖定並退出店主編輯模式"
                 >
-                  <Lock className="w-2.5 h-2.5" />
-                  <span>店主入口</span>
+                  <Lock className="w-3 h-3" />
+                  <span>店主模式已開啟（點擊鎖定）</span>
                 </button>
+              </div>
+            ) : (
+              onOpenOwnerAuth && (
+                <div className="inline-flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={onOpenOwnerAuth}
+                    className="inline-flex items-center gap-1 text-[11px] text-stone-600 hover:text-stone-400 transition-colors"
+                    title="店主管理登入"
+                  >
+                    <Lock className="w-2.5 h-2.5" />
+                    <span>店主入口</span>
+                  </button>
+                  {onOpenAnalytics && (
+                    <button
+                      type="button"
+                      onClick={onOpenAnalytics}
+                      className="inline-flex items-center gap-1 text-[11px] text-stone-600 hover:text-stone-400 transition-colors"
+                      title="店主專屬網站觀看與計算機紀錄"
+                    >
+                      <BarChart3 className="w-2.5 h-2.5" />
+                      <span>觀看紀錄</span>
+                    </button>
+                  )}
+                </div>
               )
             )}
           </div>

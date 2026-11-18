@@ -56,7 +56,7 @@ export const StoreOwnerAuthModal: React.FC<StoreOwnerAuthModalProps> = ({
             </div>
             <div>
               <h3 className="font-serif-title font-bold text-base">店主身分安全驗證</h3>
-              <p className="text-xs text-amber-200/80">花花招財貓 · 後台照片管理專區</p>
+              <p className="text-xs text-amber-200/80">花花招財貓 · 店主管理與觀看紀錄專區</p>
             </div>
           </div>
           <button

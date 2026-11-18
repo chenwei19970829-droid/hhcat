@@ -22,18 +22,24 @@ import { OriginalMenuModal } from './components/OriginalMenuModal';
 import { Footer } from './components/Footer';
 import { MobileStickyBar } from './components/MobileStickyBar';
 import { StoreOwnerAuthModal } from './components/StoreOwnerAuthModal';
+import { OwnerAnalyticsModal } from './components/OwnerAnalyticsModal';
 import { ProductDetailPage } from './components/ProductDetailPage';
 import { TopicGuidePage } from './components/TopicGuidePage';
 import { useStoreOwner } from './utils/adminAuth';
 import { FEATURED_MODELS, VillaModel } from './data/catVillaData';
+import { recordPageVisit, trackEvent } from './utils/analytics';
+import { signOutStoreOwner } from './firebase';
+import { BarChart3, Lock } from 'lucide-react';
 
 const HOME_TITLE = '貓別墅｜實木貓別墅推薦・花花招財貓 1.5cm天然松木客製貓櫃（全台免運）';
 const HOME_DESCRIPTION =
   '實木貓別墅客製首選花花招財貓！嚴選無甲醛天然松木足1.5cm純實木板，防潮微防水漆與高透耐磨安全壓克力門。支援1:1照照片客製尺寸，出貨預組裝拍照確認，全台免運直寄含1年保固。台中豐原實體門店預約體驗看實木：0966-129-569、LINE：hhcat.cc。';
 
 export default function App() {
-  const { isOwner } = useStoreOwner();
+  const { isOwner, logout } = useStoreOwner();
   const [ownerAuthOpen, setOwnerAuthOpen] = useState(false);
+  const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
+  const [pendingOpenAnalytics, setPendingOpenAnalytics] = useState(false);
   const [currentPath, setCurrentPath] = useState<string>(() =>
     typeof window !== 'undefined' ? window.location.pathname : '/'
   );
@@ -59,12 +65,44 @@ export default function App() {
   }, [currentPath]);
 
   useEffect(() => {
+    void recordPageVisit(currentPath);
+  }, [currentPath]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      const anchor = target?.closest('a') as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const href = anchor.getAttribute('href') || '';
+      if (href.startsWith('tel:')) {
+        trackEvent('phone_click', { source: 'link' });
+      } else if (href.includes('line.me')) {
+        setTimeout(() => {
+          trackEvent('line_click', { source: 'link' });
+        }, 50);
+      }
+    };
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
+  }, []);
+
+  useEffect(() => {
     if (typeof window === 'undefined' || isOwner) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('admin') === '1' || window.location.hash === '#owner') {
       setOwnerAuthOpen(true);
     }
   }, [isOwner]);
+
+  const handleOpenAnalytics = () => {
+    if (isOwner) {
+      setAnalyticsModalOpen(true);
+    } else {
+      setPendingOpenAnalytics(true);
+      setOwnerAuthOpen(true);
+    }
+  };
 
   // Lightbox Modal State
   const [lightbox, setLightbox] = useState<{
@@ -263,7 +301,11 @@ export default function App() {
 
       {/* Footer with Business Info, SEO Links, Discreet Owner Portal & Back-to-Top */}
       <Footer
-        onOpenOwnerAuth={() => setOwnerAuthOpen(true)}
+        onOpenOwnerAuth={() => {
+          setPendingOpenAnalytics(false);
+          setOwnerAuthOpen(true);
+        }}
+        onOpenAnalytics={handleOpenAnalytics}
         onNavigateHome={navigateHome}
         onNavigateToPath={navigateToPath}
       />
@@ -271,12 +313,54 @@ export default function App() {
       {/* Mobile Bottom Sticky Bar */}
       <MobileStickyBar onOpenEstimator={() => scrollToEstimator()} />
 
+      {/* Discreet Floating Quick Bar (Visible strictly to authenticated Store Owner only) */}
+      {isOwner && (
+        <div className="fixed bottom-16 lg:bottom-5 left-4 z-40 flex items-center gap-1.5 bg-stone-900/95 backdrop-blur-xs text-white px-2.5 py-1.5 rounded-xl border border-stone-700 shadow-lg text-xs">
+          <button
+            type="button"
+            onClick={() => setAnalyticsModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-800 hover:bg-amber-700 font-semibold transition-colors whitespace-nowrap"
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-amber-200" />
+            <span>網站觀看紀錄</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAnalyticsModalOpen(false);
+              logout();
+              void signOutStoreOwner();
+            }}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-stone-300 hover:text-white hover:bg-stone-800 transition-colors whitespace-nowrap"
+            title="鎖定退出店主模式"
+          >
+            <Lock className="w-3 h-3" />
+            <span>鎖定</span>
+          </button>
+        </div>
+      )}
+
       {/* Store Owner Auth Modal */}
       <StoreOwnerAuthModal
         isOpen={ownerAuthOpen}
-        onClose={() => setOwnerAuthOpen(false)}
-        onSuccess={() => setOwnerAuthOpen(false)}
-        actionTitle="解鎖店主管理與上傳編輯功能"
+        onClose={() => {
+          setOwnerAuthOpen(false);
+          setPendingOpenAnalytics(false);
+        }}
+        onSuccess={() => {
+          setOwnerAuthOpen(false);
+          if (pendingOpenAnalytics) {
+            setPendingOpenAnalytics(false);
+            setAnalyticsModalOpen(true);
+          }
+        }}
+        actionTitle={pendingOpenAnalytics ? '查看網站觀看與計算機紀錄' : '解鎖店主管理與上傳編輯功能'}
+      />
+
+      {/* Owner-Only Private Website Analytics & Calculator Stats Modal */}
+      <OwnerAnalyticsModal
+        isOpen={analyticsModalOpen}
+        onClose={() => setAnalyticsModalOpen(false)}
       />
 
       {/* Lightbox Modal for Full Image Zoom */}

@@ -27,6 +27,7 @@ import { ProductDetailPage } from './components/ProductDetailPage';
 import { TopicGuidePage } from './components/TopicGuidePage';
 import { useStoreOwner } from './utils/adminAuth';
 import { FEATURED_MODELS, VillaModel } from './data/catVillaData';
+import { useVillaModels } from './utils/villaModels';
 import { recordPageVisit, trackEvent } from './utils/analytics';
 import { signOutStoreOwner } from './firebase';
 import { BarChart3, Lock } from 'lucide-react';
@@ -43,6 +44,8 @@ export default function App() {
   const [currentPath, setCurrentPath] = useState<string>(() =>
     typeof window !== 'undefined' ? window.location.pathname : '/'
   );
+  const { models: villaModels, isSyncedWithCloud } = useVillaModels();
+  const [selectedModelSnapshot, setSelectedModelSnapshot] = useState<VillaModel | null>(null);
 
   // Sync browser back/forward buttons
   useEffect(() => {
@@ -202,15 +205,23 @@ export default function App() {
   };
 
   const handleOpenModelPage = (model: VillaModel) => {
-    navigateToPath(`/villa/${model.id}`);
+    setSelectedModelSnapshot(model);
+    navigateToPath(`/villa/${encodeURIComponent(model.id)}`);
   };
 
-  // Resolve route match
+  // Resolve route match against live models (Firestore + localStorage + defaults)
   const normalizedPath = currentPath.replace(/\/+$/, '') || '/';
   const villaMatch = normalizedPath.match(/^\/villa\/([^/]+)$/);
-  const matchedModel = villaMatch
-    ? FEATURED_MODELS.find((m) => m.id === villaMatch[1]) || FEATURED_MODELS[0]
+  const requestedVillaId = villaMatch ? decodeURIComponent(villaMatch[1]).trim() : null;
+  const matchedModel = requestedVillaId
+    ? villaModels.find((m) => m.id === requestedVillaId) ||
+      (selectedModelSnapshot && selectedModelSnapshot.id === requestedVillaId
+        ? selectedModelSnapshot
+        : null) ||
+      FEATURED_MODELS.find((m) => m.id === requestedVillaId) ||
+      null
     : null;
+  const isResolvingCustomVilla = Boolean(requestedVillaId && !matchedModel && !isSyncedWithCloud);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-stone-800 font-sans selection:bg-amber-100 selection:text-amber-900">
@@ -225,11 +236,32 @@ export default function App() {
         {matchedModel ? (
           <ProductDetailPage
             model={matchedModel}
-            allModels={FEATURED_MODELS}
+            allModels={villaModels.length > 0 ? villaModels : FEATURED_MODELS}
             onNavigateHome={navigateHome}
             onNavigateToPath={navigateToPath}
             onSelectForQuote={handleSelectModelForQuote}
           />
+        ) : isResolvingCustomVilla ? (
+          <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3 px-4 text-center">
+            <div className="w-8 h-8 rounded-full border-2 border-amber-900 border-t-transparent animate-spin" />
+            <p className="text-sm text-stone-600 font-medium">正在載入此款貓別墅規格明細...</p>
+          </div>
+        ) : requestedVillaId ? (
+          <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 px-4 text-center max-w-md mx-auto">
+            <h1 className="font-serif-title text-xl font-bold text-stone-900">
+              找不到此款貓別墅規格
+            </h1>
+            <p className="text-sm text-stone-600">
+              此款式可能已調整名稱或下架，請返回精選目錄查看最新款式與尺寸報價。
+            </p>
+            <button
+              type="button"
+              onClick={() => navigateHome('#models')}
+              className="px-5 py-2.5 text-sm font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl transition-colors"
+            >
+              返回全部精選款式
+            </button>
+          </div>
         ) : normalizedPath === '/guides/solid-wood-craft' ? (
           <TopicGuidePage
             mode="craft"
@@ -260,6 +292,7 @@ export default function App() {
 
             {/* 4. Featured Cat Villa Models */}
             <FeaturedModels
+              externalModels={villaModels}
               onSelectForQuote={handleSelectModelForQuote}
               onOpenImageZoom={handleOpenImageZoom}
               onOpenModelPage={handleOpenModelPage}

@@ -6,11 +6,20 @@ import { doc, setDoc } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
 import { useStoreOwner } from '../utils/adminAuth';
 import { StoreOwnerAuthModal } from './StoreOwnerAuthModal';
+import { CloudSyncStatusBar } from './CloudSyncStatusBar';
 import {
-  VILLA_DELETED_KEY,
+  fitImagesWithinFirestoreLimit,
+  formatFirestoreActionError,
+  isQuotaError
+} from '../utils/cloudSync';
+import {
+  VillaCloudError,
+  addLocalDeletedModelId,
+  buildFirestoreVillaPayload,
   loadCachedVillaModels,
   lookupMenuPricing,
   notifyVillaModelsUpdated,
+  removeLocalDeletedModelId,
   sortVillaModels
 } from '../utils/villaModels';
 import {
@@ -29,18 +38,40 @@ import {
   Sparkles,
   X,
   AlertCircle,
-  Images
+  Images,
+  RefreshCw
 } from 'lucide-react';
+
+export interface FeaturedCloudSyncBridge {
+  cloudStatus: 'loading' | 'synced' | 'error';
+  cloudError: VillaCloudError | null;
+  setCloudStatus: (status: 'loading' | 'synced' | 'error') => void;
+  setCloudError: (err: VillaCloudError | null) => void;
+  cloudModelIds: Set<string>;
+  unsyncedLocalModels: VillaModel[];
+  isSyncingManual: boolean;
+  refreshFromCloud: () => Promise<{ ok: boolean; count?: number; error?: string }>;
+  syncStrandedModel: (
+    model: VillaModel
+  ) => Promise<{ ok: boolean; syncedModel?: VillaModel; error?: string }>;
+  discardStrandedModel: (modelId: string) => void;
+  markModelSynced: (model: VillaModel) => void;
+  markModelDeleted: (modelId: string) => void;
+}
 
 interface FeaturedModelsProps {
   externalModels?: VillaModel[];
+  cloudSync?: FeaturedCloudSyncBridge;
   onSelectForQuote: (model: VillaModel) => void;
   onOpenImageZoom: (imageTitle: string, imageUrl: string, subtitle?: string) => void;
   onOpenModelPage?: (model: VillaModel) => void;
 }
 
+const DEFAULT_FEATURED_IDS = new Set(FEATURED_MODELS.map((m) => m.id));
+
 export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
   externalModels,
+  cloudSync,
   onSelectForQuote,
   onOpenModelPage
 }) => {
@@ -74,6 +105,13 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
   const [formHighlights, setFormHighlights] = useState<string[]>([]);
   const [newHighlightInput, setNewHighlightInput] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Cloud Sync & In-App Delete Confirmation State
+  const [syncNoticeBanner, setSyncNoticeBanner] = useState<string | null>(null);
+  const [deletingModel, setDeletingModel] = useState<VillaModel | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Drag & Drop States (Desktop photo drop & highlight tag reordering)
   const [isDraggingImages, setIsDraggingImages] = useState(false);
@@ -184,38 +222,88 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     setIsFormModalOpen(true);
   };
 
-  const handleDeleteModel = async (model: VillaModel, e: React.MouseEvent) => {
+  const handleRequestDeleteModel = (model: VillaModel, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isOwner) {
       setAuthActionTitle('刪除精選款式');
       setIsAuthModalOpen(true);
       return;
     }
-    if (!window.confirm(`確定要刪除「${model.name}」這個精選款式嗎？`)) return;
+    setDeleteError(null);
+    setDeletingModel(model);
+  };
+
+  const handleConfirmDeleteModel = async () => {
+    if (!deletingModel || isDeleting) return;
+    const targetModel = deletingModel;
+
+    setIsDeleting(true);
+    setDeleteError(null);
 
     try {
-      const deletedJson = localStorage.getItem(VILLA_DELETED_KEY);
-      const deletedIds: string[] = deletedJson ? JSON.parse(deletedJson) : [];
-      if (!deletedIds.includes(model.id)) {
-        deletedIds.push(model.id);
-        localStorage.setItem(VILLA_DELETED_KEY, JSON.stringify(deletedIds));
-      }
-    } catch (err) {
-      console.error(err);
-    }
-
-    const updated = models.filter((m) => m.id !== model.id);
-    setModels(updated);
-    notifyVillaModelsUpdated(updated);
-
-    try {
-      await setDoc(doc(db, 'featuredModels', model.id), {
-        id: model.id,
+      await setDoc(doc(db, 'featuredModels', targetModel.id), {
+        id: targetModel.id,
         deleted: true,
         updatedAt: new Date().toISOString()
       });
+
+      addLocalDeletedModelId(targetModel.id);
+      const updated = models.filter((m) => m.id !== targetModel.id);
+      setModels(updated);
+      notifyVillaModelsUpdated(updated);
+      cloudSync?.markModelDeleted(targetModel.id);
+      setDeletingModel(null);
+      setSyncNoticeBanner(`已將「${targetModel.name}」從雲端資料庫移除，手機、電腦、平板將同步下架。`);
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `featuredModels/${model.id}`);
+      handleFirestoreError(err, OperationType.DELETE, `featuredModels/${targetModel.id}`);
+      const msg = formatFirestoreActionError(err, '雲端刪除款式');
+      setDeleteError(msg);
+      if (isQuotaError(err)) {
+        cloudSync?.setCloudStatus('error');
+        cloudSync?.setCloudError({ message: msg, isQuota: true });
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleManualRefresh = async () => {
+    if (!cloudSync) return;
+    setSyncNoticeBanner(null);
+    const result = await cloudSync.refreshFromCloud();
+    if (result.ok) {
+      setSyncNoticeBanner(
+        `已完成雲端款式比對（雲端共 ${result.count ?? cloudSync.cloudModelIds.size} 筆自訂款式），手機與電腦現為完全一致內容。`
+      );
+    }
+  };
+
+  const handleSyncRecoveryItem = async (modelId: string) => {
+    if (!cloudSync) return;
+    const target = cloudSync.unsyncedLocalModels.find((m) => m.id === modelId);
+    if (!target) return;
+    setSyncNoticeBanner(null);
+    const res = await cloudSync.syncStrandedModel(target);
+    if (res.ok && res.syncedModel) {
+      setSyncNoticeBanner(`已將「${res.syncedModel.name}」壓縮並補傳至雲端，手機現在也可以看到了！`);
+    }
+  };
+
+  const handleSyncAllRecoveryItems = async () => {
+    if (!cloudSync || cloudSync.unsyncedLocalModels.length === 0) return;
+    setSyncNoticeBanner(null);
+    const queue = [...cloudSync.unsyncedLocalModels];
+    let successCount = 0;
+    for (const m of queue) {
+      const res = await cloudSync.syncStrandedModel(m);
+      if (res.ok) {
+        successCount += 1;
+      } else {
+        break;
+      }
+    }
+    if (successCount > 0) {
+      setSyncNoticeBanner(`已成功補傳 ${successCount} 筆款式至雲端資料庫，手機／電腦／平板現在皆可看到！`);
     }
   };
 
@@ -231,7 +319,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
       setFormError(null);
       const compressedList: string[] = [];
       for (const file of files) {
-        const compressed = await compressImage(file, 960, 0.74);
+        const compressed = await compressImage(file, 840, 0.7);
         compressedList.push(compressed);
       }
       if (compressedList.length > 0) {
@@ -338,6 +426,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!formName.trim()) {
       setFormError('請填寫款式標題名稱');
       return;
@@ -348,8 +437,12 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
       return;
     }
 
+    setIsSubmitting(true);
+    setFormError(null);
+
     const targetId = editingModelId || `custom-model-${Date.now()}`;
-    const newModel: VillaModel = {
+    const nowIso = new Date().toISOString();
+    const draftModel: VillaModel = {
       id: targetId,
       name: formName.trim(),
       subtitle: formSubtitle.trim() || '純實木無甲醛 · 高透耐磨安全壓克力門',
@@ -374,45 +467,61 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
       isCustomUpload: true
     };
 
-    const existingIdx = models.findIndex((m) => m.id === targetId);
-    let rawUpdated: VillaModel[];
-    if (existingIdx >= 0) {
-      rawUpdated = [...models];
-      rawUpdated[existingIdx] = newModel;
-    } else {
-      rawUpdated = [newModel, ...models];
-    }
-    const updated = sortVillaModels(rawUpdated);
-
-    setModels(updated);
-    notifyVillaModelsUpdated(updated);
+    const firestoreMeta = buildFirestoreVillaPayload(draftModel, nowIso);
 
     try {
-      await setDoc(doc(db, 'featuredModels', targetId), {
-        id: targetId,
-        name: newModel.name,
-        subtitle: newModel.subtitle,
-        heightGroup: newModel.heightGroup,
-        badge: newModel.badge || '',
-        price: newModel.price,
-        installFee: newModel.installFee,
-        height: newModel.dimensions.height,
-        depth: newModel.dimensions.depth,
-        length: newModel.dimensions.length,
-        image: newModel.image,
-        images: newModel.images || [],
-        highlights: newModel.highlights,
-        recommendedCats: newModel.recommendedCats,
-        suitableSpace: newModel.suitableSpace,
-        description: newModel.description,
-        deleted: false,
-        updatedAt: new Date().toISOString()
+      const fitted = await fitImagesWithinFirestoreLimit(finalImages, firestoreMeta, {
+        primaryField: 'image',
+        arrayField: 'images'
       });
+
+      if (!fitted.ok) {
+        setFormError(fitted.reason);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Write to Firestore FIRST so desktop never misleads owner when cloud write fails
+      await setDoc(doc(db, 'featuredModels', targetId), {
+        ...firestoreMeta,
+        image: fitted.images[0],
+        images: fitted.images
+      });
+
+      const syncedModel: VillaModel = {
+        ...draftModel,
+        image: fitted.images[0],
+        images: fitted.images
+      };
+
+      removeLocalDeletedModelId(targetId);
+
+      const existingIdx = models.findIndex((m) => m.id === targetId);
+      const rawUpdated =
+        existingIdx >= 0
+          ? models.map((m) => (m.id === targetId ? syncedModel : m))
+          : [syncedModel, ...models];
+      const updated = sortVillaModels(rawUpdated);
+
+      setModels(updated);
+      notifyVillaModelsUpdated(updated);
+      cloudSync?.markModelSynced(syncedModel);
+
+      setIsFormModalOpen(false);
+      setSyncNoticeBanner(
+        `「${syncedModel.name}」已上傳並寫入雲端資料庫，手機、電腦、平板現在皆會同步顯示！`
+      );
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `featuredModels/${targetId}`);
+      const errMsg = formatFirestoreActionError(err, '上傳貓別墅款式至雲端');
+      setFormError(errMsg);
+      if (isQuotaError(err)) {
+        cloudSync?.setCloudStatus('error');
+        cloudSync?.setCloudError({ message: errMsg, isQuota: true });
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsFormModalOpen(false);
   };
 
   // Filter & sort models in natural A-Z / 1-99 order
@@ -464,9 +573,21 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
             </p>
           </div>
 
-          {/* Action buttons: Store Owner Add (hidden from public visitors) */}
+          {/* Action buttons: Store Owner Sync & Add (hidden from public visitors) */}
           {isOwner && (
-            <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+            <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+              {cloudSync && (
+                <button
+                  type="button"
+                  onClick={handleManualRefresh}
+                  disabled={cloudSync.isSyncingManual}
+                  className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold text-stone-700 bg-white hover:bg-stone-100 border border-stone-300 rounded-xl shadow-2xs transition-colors disabled:opacity-60"
+                  title="向雲端資料庫重新抓取最新清單，確認手機與電腦完全一致"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${cloudSync.isSyncingManual ? 'animate-spin' : ''}`} />
+                  <span>同步檢查 ({cloudSync.cloudModelIds.size} 筆雲端)</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleOpenAddModal}
@@ -486,6 +607,31 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
             </div>
           )}
         </div>
+
+        {/* Owner Cloud Status, Quota Alerts & Stranded Local Model Recovery */}
+        {isOwner && (
+          <CloudSyncStatusBar
+            sectionLabel="精選貓別墅款式"
+            cloudError={cloudSync?.cloudError ?? null}
+            onDismissError={() => cloudSync?.setCloudError(null)}
+            onRetrySync={cloudSync ? handleManualRefresh : undefined}
+            syncNoticeBanner={syncNoticeBanner}
+            onDismissNotice={() => setSyncNoticeBanner(null)}
+            recoveryItems={(cloudSync?.unsyncedLocalModels || []).map((m) => ({
+              id: m.id,
+              title: m.name,
+              subtitle: `${m.dimensions.dimensionCode} cm · NT$ ${m.price.toLocaleString()} · 共 ${(m.images && m.images.length) || 1} 張照片`,
+              thumbnailUrl: (m.images && m.images[0]) || m.image
+            }))}
+            isSyncing={cloudSync?.isSyncingManual ?? false}
+            onSyncRecoveryItem={handleSyncRecoveryItem}
+            onDiscardRecoveryItem={(id) => {
+              cloudSync?.discardStrandedModel(id);
+              setSyncNoticeBanner('已移除該筆僅存於本機的未同步暫存款式。');
+            }}
+            onSyncAllRecoveryItems={handleSyncAllRecoveryItems}
+          />
+        )}
 
         {/* Category Filter Controls: 全部尺寸、高90、高120、高150、高180 */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-8 pb-4 border-b border-stone-200">
@@ -624,7 +770,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
 
                     <button
                       type="button"
-                      onClick={(e) => handleDeleteModel(model, e)}
+                      onClick={(e) => handleRequestDeleteModel(model, e)}
                       className="px-2.5 py-1 bg-red-600/90 hover:bg-red-700 text-white text-[11px] font-semibold rounded-lg shadow-sm flex items-center gap-1 backdrop-blur-xs"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -633,6 +779,28 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Owner Sync Status Strip inside card */}
+              {isOwner && (
+                <div className="px-6 pt-3 pb-0 flex items-center justify-between text-[10px]">
+                  {cloudSync?.cloudModelIds.has(model.id) ? (
+                    <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                      雲端已同步（手機／電腦皆可見）
+                    </span>
+                  ) : DEFAULT_FEATURED_IDS.has(model.id) ? (
+                    <span className="inline-flex items-center gap-1 font-semibold text-stone-500">
+                      <span className="w-1.5 h-1.5 rounded-full bg-stone-400" />
+                      官方預設目錄款（所有裝置皆有）
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 font-semibold text-amber-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
+                      {cloudSync?.cloudStatus === 'error' ? '離線／額度滿快取中' : '等待雲端確認...'}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Content Body */}
               <div className="p-6 flex-1 flex flex-col justify-between space-y-4">
@@ -1302,20 +1470,116 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
               <div className="pt-3 border-t border-stone-200 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setIsFormModalOpen(false)}
-                  className="px-4 py-2.5 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
+                  className="px-4 py-2.5 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl transition-colors disabled:opacity-50"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                  disabled={isSubmitting}
+                  className="px-6 py-2.5 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-60"
                 >
                   <Check className="w-4 h-4" />
-                  <span>{editingModelId ? '儲存變更' : '確認上傳建立款式'}</span>
+                  <span>
+                    {isSubmitting
+                      ? '正在寫入雲端資料庫...'
+                      : editingModelId
+                        ? '儲存並同步雲端'
+                        : '確認上傳至雲端發佈'}
+                  </span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Delete Confirmation Modal */}
+      {deletingModel && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn"
+        >
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-stone-200">
+            <div className="flex items-start justify-between gap-3 border-b border-stone-200 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-serif-title font-bold text-stone-900 text-base">
+                    確定要刪除此貓別墅款式？
+                  </h4>
+                  <p className="text-[11px] text-stone-500">
+                    刪除後將同步從手機、電腦、平板所有裝置移除
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => {
+                  setDeletingModel(null);
+                  setDeleteError(null);
+                }}
+                className="p-1 text-stone-400 hover:text-stone-600 rounded-lg"
+                title="關閉視窗"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-stone-50 border border-stone-200">
+              <img
+                src={(deletingModel.images && deletingModel.images[0]) || deletingModel.image}
+                alt={deletingModel.name}
+                className="w-16 h-16 rounded-xl object-cover border border-stone-200 shrink-0"
+              />
+              <div className="min-w-0">
+                <div className="inline-block px-2 py-0.5 rounded bg-amber-900 text-white text-[10px] font-bold font-mono mb-1">
+                  {deletingModel.dimensions.dimensionCode} cm
+                </div>
+                <div className="font-bold text-stone-900 text-xs truncate">
+                  {deletingModel.name}
+                </div>
+                <div className="text-[11px] font-semibold text-amber-900 font-mono mt-0.5">
+                  NT$ {deletingModel.price.toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div className="p-2.5 bg-red-50 text-red-700 rounded-xl text-xs flex items-center gap-1.5 border border-red-200">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => {
+                  setDeletingModel(null);
+                  setDeleteError(null);
+                }}
+                className="px-4 py-2.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-xl transition-colors"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDeleteModel}
+                className="px-5 py-2.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-60"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeleting ? '雲端刪除同步中...' : '確認刪除款式'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

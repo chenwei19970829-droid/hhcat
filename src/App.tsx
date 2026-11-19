@@ -44,7 +44,8 @@ export default function App() {
   const [currentPath, setCurrentPath] = useState<string>(() =>
     typeof window !== 'undefined' ? window.location.pathname : '/'
   );
-  const { models: villaModels, isSyncedWithCloud } = useVillaModels();
+  const villaSync = useVillaModels();
+  const { models: villaModels, isSyncedWithCloud } = villaSync;
   const [selectedModelSnapshot, setSelectedModelSnapshot] = useState<VillaModel | null>(null);
 
   // Sync browser back/forward buttons
@@ -293,6 +294,7 @@ export default function App() {
             {/* 4. Featured Cat Villa Models */}
             <FeaturedModels
               externalModels={villaModels}
+              cloudSync={villaSync}
               onSelectForQuote={handleSelectModelForQuote}
               onOpenImageZoom={handleOpenImageZoom}
               onOpenModelPage={handleOpenModelPage}

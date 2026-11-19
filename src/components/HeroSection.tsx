@@ -1,11 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { STORE_INFO } from '../data/catVillaData';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocsFromServer, onSnapshot, setDoc } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
 import { useStoreOwner } from '../utils/adminAuth';
 import { StoreOwnerAuthModal } from './StoreOwnerAuthModal';
 import { MultiPhotoLightbox } from './MultiPhotoLightbox';
+import { CloudErrorState, CloudSyncStatusBar } from './CloudSyncStatusBar';
+import {
+  fitImagesWithinFirestoreLimit,
+  formatFirestoreActionError,
+  isQuotaError,
+  loadRecoveryQueue,
+  saveRecoveryQueue
+} from '../utils/cloudSync';
 import {
   Sparkles,
   Truck,
@@ -23,7 +31,8 @@ import {
   Navigation,
   X,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  RefreshCw
 } from 'lucide-react';
 
 interface StorefrontPhotoItem {
@@ -42,12 +51,49 @@ interface HeroSectionProps {
 
 const STOREFRONT_STORAGE_KEY = 'hhcat_storefront_photos_v1';
 const DELETED_STOREFRONT_KEY = 'hhcat_deleted_storefront_ids_v1';
+const STOREFRONT_RECOVERY_KEY = 'hhcat_storefront_unsynced_recovery_v1';
 
 const DEFAULT_STOREFRONT_PHOTO: StorefrontPhotoItem = {
   id: 'default-storefront',
   imageUrl: STORE_INFO.storefrontImage,
   caption: '實體門店現場實景 · 臺中豐原',
   isDefault: true
+};
+
+const getLocalDeletedStorefrontIds = (): string[] => {
+  try {
+    const raw = localStorage.getItem(DELETED_STOREFRONT_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+const addLocalDeletedStorefrontId = (id: string) => {
+  try {
+    const ids = getLocalDeletedStorefrontIds();
+    if (!ids.includes(id)) {
+      ids.push(id);
+      localStorage.setItem(DELETED_STOREFRONT_KEY, JSON.stringify(ids));
+    }
+  } catch (err) {
+    console.warn('Could not save deleted storefront id:', err);
+  }
+};
+
+const removeLocalDeletedStorefrontId = (id: string) => {
+  try {
+    const ids = getLocalDeletedStorefrontIds();
+    if (ids.includes(id)) {
+      localStorage.setItem(
+        DELETED_STOREFRONT_KEY,
+        JSON.stringify(ids.filter((x) => x !== id))
+      );
+    }
+  } catch (err) {
+    console.warn('Could not remove deleted storefront id:', err);
+  }
 };
 
 export const HeroSection: React.FC<HeroSectionProps> = ({
@@ -62,6 +108,15 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const [isPaused, setIsPaused] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
+  // Cloud sync & recovery state
+  const [cloudError, setCloudError] = useState<CloudErrorState | null>(null);
+  const [cloudItemIds, setCloudItemIds] = useState<Set<string>>(() => new Set());
+  const [unsyncedLocalPhotos, setUnsyncedLocalPhotos] = useState<StorefrontPhotoItem[]>(() =>
+    loadRecoveryQueue<StorefrontPhotoItem>(STOREFRONT_RECOVERY_KEY)
+  );
+  const [isSyncingManual, setIsSyncingManual] = useState(false);
+  const [syncNoticeBanner, setSyncNoticeBanner] = useState<string | null>(null);
+
   // Lightbox state for storefront carousel
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
@@ -74,13 +129,104 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const [uploadCaption, setUploadCaption] = useState('');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
+
+  // In-app delete confirmation modal
+  const [deletingPhoto, setDeletingPhoto] = useState<StorefrontPhotoItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const applyFirestoreSnapshotDocs = useCallback(
+    (docs: Array<{ id: string; data: () => Record<string, unknown> }>) => {
+      const deletedFromCloud = new Set<string>();
+      const remotePhotos: StorefrontPhotoItem[] = [];
+
+      docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const resolvedId = (typeof data.id === 'string' && data.id) || docSnap.id;
+        if (data.deleted === true) {
+          deletedFromCloud.add(resolvedId);
+        } else if (resolvedId && typeof data.imageUrl === 'string' && data.imageUrl) {
+          remotePhotos.push({
+            id: resolvedId,
+            imageUrl: data.imageUrl,
+            caption:
+              typeof data.caption === 'string' && data.caption
+                ? data.caption
+                : '實體門店現場實景 · 臺中豐原'
+          });
+        }
+      });
+
+      remotePhotos.sort((a, b) => (b.id > a.id ? 1 : -1));
+      const mergedDeleted = new Set<string>([
+        ...Array.from(deletedFromCloud),
+        ...getLocalDeletedStorefrontIds()
+      ]);
+
+      const activeRemotes = remotePhotos.filter((r) => !mergedDeleted.has(r.id));
+      const cloudIdsSet = new Set(activeRemotes.map((r) => r.id));
+
+      // Rescue any storefront photos stranded in localStorage
+      const strandedMap = new Map<string, StorefrontPhotoItem>();
+      loadRecoveryQueue<StorefrontPhotoItem>(STOREFRONT_RECOVERY_KEY).forEach((p) => {
+        if (p && p.id && !p.isDefault && !cloudIdsSet.has(p.id) && !mergedDeleted.has(p.id)) {
+          strandedMap.set(p.id, p);
+        }
+      });
+
+      try {
+        const cachedRaw = localStorage.getItem(STOREFRONT_STORAGE_KEY);
+        if (cachedRaw) {
+          const parsed = JSON.parse(cachedRaw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((p) => {
+              if (
+                p &&
+                p.id &&
+                p.id !== DEFAULT_STOREFRONT_PHOTO.id &&
+                !p.isDefault &&
+                !cloudIdsSet.has(p.id) &&
+                !mergedDeleted.has(p.id)
+              ) {
+                strandedMap.set(p.id, p as StorefrontPhotoItem);
+              }
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      const strandedList = Array.from(strandedMap.values());
+      saveRecoveryQueue(STOREFRONT_RECOVERY_KEY, strandedList);
+
+      const hasDefault = !mergedDeleted.has(DEFAULT_STOREFRONT_PHOTO.id);
+      const combined = hasDefault
+        ? [DEFAULT_STOREFRONT_PHOTO, ...activeRemotes]
+        : activeRemotes.length > 0
+          ? activeRemotes
+          : [DEFAULT_STOREFRONT_PHOTO];
+
+      setCloudError(null);
+      setCloudItemIds(cloudIdsSet);
+      setUnsyncedLocalPhotos(strandedList);
+      setStorefrontPhotos(combined);
+      try {
+        localStorage.setItem(STOREFRONT_STORAGE_KEY, JSON.stringify(combined));
+      } catch (err) {
+        console.warn(err);
+      }
+    },
+    []
+  );
 
   // Load initial localStorage & subscribe to Firestore storefrontPhotos
   useEffect(() => {
     try {
-      const deletedJson = localStorage.getItem(DELETED_STOREFRONT_KEY);
-      const deletedIds: string[] = deletedJson ? JSON.parse(deletedJson) : [];
+      const deletedIds = getLocalDeletedStorefrontIds();
       const savedJson = localStorage.getItem(STOREFRONT_STORAGE_KEY);
       if (savedJson) {
         const parsed: StorefrontPhotoItem[] = JSON.parse(savedJson);
@@ -98,45 +244,19 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     const unsubscribe = onSnapshot(
       collection(db, 'storefrontPhotos'),
       (snapshot) => {
-        const deletedFromCloud = new Set<string>();
-        const remotePhotos: StorefrontPhotoItem[] = [];
-
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          if (data.deleted === true) {
-            deletedFromCloud.add(data.id || docSnap.id);
-          } else if (data.id && data.imageUrl) {
-            remotePhotos.push({
-              id: data.id,
-              imageUrl: data.imageUrl,
-              caption: data.caption || '實體門店現場實景 · 臺中豐原'
-            });
-          }
-        });
-
-        // Sort newest uploaded first, keep default if not deleted
-        remotePhotos.sort((a, b) => (b.id > a.id ? 1 : -1));
-        const hasDefault = !deletedFromCloud.has(DEFAULT_STOREFRONT_PHOTO.id);
-        const combined = hasDefault
-          ? [DEFAULT_STOREFRONT_PHOTO, ...remotePhotos]
-          : remotePhotos.length > 0
-          ? remotePhotos
-          : [DEFAULT_STOREFRONT_PHOTO];
-
-        setStorefrontPhotos(combined);
-        try {
-          localStorage.setItem(STOREFRONT_STORAGE_KEY, JSON.stringify(combined));
-        } catch (err) {
-          console.warn(err);
-        }
+        applyFirestoreSnapshotDocs(snapshot.docs);
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, 'storefrontPhotos');
+        setCloudError({
+          message: formatFirestoreActionError(error, '讀取雲端門店實景照片'),
+          isQuota: isQuotaError(error)
+        });
       }
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [applyFirestoreSnapshotDocs]);
 
   // Keep activeIndex valid when photos array changes
   useEffect(() => {
@@ -201,16 +321,93 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     setIsUploadModalOpen(true);
   };
 
+  const handleManualCloudRefresh = async () => {
+    if (isSyncingManual) return;
+    setIsSyncingManual(true);
+    setSyncNoticeBanner(null);
+    try {
+      const serverSnap = await getDocsFromServer(collection(db, 'storefrontPhotos'));
+      applyFirestoreSnapshotDocs(serverSnap.docs);
+      const activeCount = serverSnap.docs.filter((d) => d.data().deleted !== true).length;
+      setSyncNoticeBanner(
+        `已完成門店實景雲端校對（雲端共 ${activeCount} 張照片），手機與電腦現為完全一致內容。`
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.GET, 'storefrontPhotos');
+      setCloudError({
+        message: formatFirestoreActionError(err, '手動重整門店實景雲端'),
+        isQuota: isQuotaError(err)
+      });
+    } finally {
+      setIsSyncingManual(false);
+    }
+  };
+
+  const syncStrandedStorefrontPhoto = async (localPhoto: StorefrontPhotoItem): Promise<boolean> => {
+    const nowIso = new Date().toISOString();
+    const meta = {
+      id: localPhoto.id,
+      caption: localPhoto.caption || '臺中豐原門店實景展示',
+      deleted: false,
+      createdAt: nowIso
+    };
+    try {
+      const fitted = await fitImagesWithinFirestoreLimit([localPhoto.imageUrl], meta, {
+        primaryField: 'imageUrl'
+      });
+      if (!fitted.ok) {
+        setCloudError({ message: fitted.reason, isQuota: false });
+        return false;
+      }
+
+      await setDoc(doc(db, 'storefrontPhotos', localPhoto.id), {
+        ...meta,
+        imageUrl: fitted.images[0]
+      });
+
+      const synced: StorefrontPhotoItem = {
+        ...localPhoto,
+        imageUrl: fitted.images[0]
+      };
+      removeLocalDeletedStorefrontId(localPhoto.id);
+      setUnsyncedLocalPhotos((prev) => {
+        const next = prev.filter((p) => p.id !== localPhoto.id);
+        saveRecoveryQueue(STOREFRONT_RECOVERY_KEY, next);
+        return next;
+      });
+      setCloudItemIds((prev) => new Set(prev).add(localPhoto.id));
+      setCloudError(null);
+      setStorefrontPhotos((prev) => {
+        const updated = [...prev.filter((p) => p.id !== synced.id), synced];
+        try {
+          localStorage.setItem(STOREFRONT_STORAGE_KEY, JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      return true;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `storefrontPhotos/${localPhoto.id}`);
+      setCloudError({
+        message: formatFirestoreActionError(err, '補傳門店實景照片至雲端'),
+        isQuota: isQuotaError(err)
+      });
+      return false;
+    }
+  };
+
   const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     try {
+      setIsProcessingImages(true);
       setUploadError(null);
       const compressedList: string[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (file.type.startsWith('image/')) {
-          const compressed = await compressImage(file, 960, 0.74);
+          const compressed = await compressImage(file, 840, 0.7);
           compressedList.push(compressed);
         }
       }
@@ -220,12 +417,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     } catch {
       setUploadError('照片處理失敗，請換一張再試');
     } finally {
+      setIsProcessingImages(false);
       e.target.value = '';
     }
   };
 
   const handleSaveStorefrontPhotos = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (uploadImages.length === 0) {
       setUploadError('請至少選擇一張門店實景照片');
       return;
@@ -233,24 +432,39 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     setIsSaving(true);
     setUploadError(null);
 
+    const createdItems: StorefrontPhotoItem[] = [];
+    const captionText = uploadCaption.trim() || '臺中豐原門店實景展示';
+
     try {
-      const createdItems: StorefrontPhotoItem[] = [];
       for (let i = 0; i < uploadImages.length; i++) {
         const newId = `sf-${Date.now()}-${i}`;
+        const nowIso = new Date().toISOString();
+        const meta = {
+          id: newId,
+          caption: captionText,
+          deleted: false,
+          createdAt: nowIso
+        };
+
+        const fitted = await fitImagesWithinFirestoreLimit([uploadImages[i]], meta, {
+          primaryField: 'imageUrl'
+        });
+        if (!fitted.ok) {
+          throw new Error(fitted.reason);
+        }
+
         const item: StorefrontPhotoItem = {
           id: newId,
-          imageUrl: uploadImages[i],
-          caption: uploadCaption.trim() || '臺中豐原門店實景展示'
+          imageUrl: fitted.images[0],
+          caption: captionText
         };
-        createdItems.push(item);
 
         await setDoc(doc(db, 'storefrontPhotos', newId), {
-          id: newId,
-          imageUrl: item.imageUrl,
-          caption: item.caption,
-          deleted: false,
-          createdAt: new Date().toISOString()
+          ...meta,
+          imageUrl: item.imageUrl
         });
+
+        createdItems.push(item);
       }
 
       const updated = [...storefrontPhotos, ...createdItems];
@@ -260,19 +474,37 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       } catch (err) {
         console.warn(err);
       }
+      setCloudItemIds((prev) => {
+        const next = new Set(prev);
+        createdItems.forEach((c) => next.add(c.id));
+        return next;
+      });
+      setCloudError(null);
       setActiveIndex(updated.length - 1);
       setUploadImages([]);
       setUploadCaption('');
       setIsUploadModalOpen(false);
+      setSyncNoticeBanner(
+        `已成功上傳 ${createdItems.length} 張門店實景照並寫入雲端資料庫，手機、電腦、平板訪客皆可即時查看！`
+      );
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'storefrontPhotos');
-      setUploadError('上傳雲端時發生錯誤，請稍後再試');
+      if (createdItems.length > 0) {
+        const updated = [...storefrontPhotos, ...createdItems];
+        setStorefrontPhotos(updated);
+        setUploadImages((prev) => prev.slice(createdItems.length));
+      }
+      const msg = formatFirestoreActionError(err, '上傳門店實景照至雲端');
+      setUploadError(msg);
+      if (isQuotaError(err)) {
+        setCloudError({ message: msg, isQuota: true });
+      }
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDeleteCurrentPhoto = async (e: React.MouseEvent) => {
+  const handleRequestDeleteCurrentPhoto = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isOwner) {
       setAuthActionTitle('刪除門店實景照片');
@@ -281,42 +513,54 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       return;
     }
 
-    const currentPhoto = storefrontPhotos[activeIndex];
-    if (!currentPhoto) return;
+    const photoToDelete = storefrontPhotos[activeIndex];
+    if (!photoToDelete) return;
     if (storefrontPhotos.length <= 1) {
-      setUploadError('門店實景至少需保留一張照片展示');
+      setCloudError({ message: '門店實景至少需保留一張照片展示，無法刪除最後一張。', isQuota: false });
       return;
     }
-    if (!window.confirm('確定要刪除目前這張門店實景照片嗎？')) return;
+    setDeleteError(null);
+    setDeletingPhoto(photoToDelete);
+  };
+
+  const handleConfirmDeletePhoto = async () => {
+    if (!deletingPhoto || isDeleting) return;
+    const targetPhoto = deletingPhoto;
+    setIsDeleting(true);
+    setDeleteError(null);
 
     try {
-      const deletedJson = localStorage.getItem(DELETED_STOREFRONT_KEY);
-      const deletedIds: string[] = deletedJson ? JSON.parse(deletedJson) : [];
-      if (!deletedIds.includes(currentPhoto.id)) {
-        deletedIds.push(currentPhoto.id);
-        localStorage.setItem(DELETED_STOREFRONT_KEY, JSON.stringify(deletedIds));
-      }
-    } catch (err) {
-      console.warn(err);
-    }
-
-    const updated = storefrontPhotos.filter((p) => p.id !== currentPhoto.id);
-    setStorefrontPhotos(updated);
-    setActiveIndex(0);
-    try {
-      localStorage.setItem(STOREFRONT_STORAGE_KEY, JSON.stringify(updated));
-    } catch (err) {
-      console.warn(err);
-    }
-
-    try {
-      await setDoc(doc(db, 'storefrontPhotos', currentPhoto.id), {
-        id: currentPhoto.id,
+      await setDoc(doc(db, 'storefrontPhotos', targetPhoto.id), {
+        id: targetPhoto.id,
         deleted: true,
         updatedAt: new Date().toISOString()
       });
+
+      addLocalDeletedStorefrontId(targetPhoto.id);
+      const updated = storefrontPhotos.filter((p) => p.id !== targetPhoto.id);
+      setStorefrontPhotos(updated);
+      setActiveIndex(0);
+      try {
+        localStorage.setItem(STOREFRONT_STORAGE_KEY, JSON.stringify(updated));
+      } catch (err) {
+        console.warn(err);
+      }
+      setCloudItemIds((prev) => {
+        const next = new Set(prev);
+        next.delete(targetPhoto.id);
+        return next;
+      });
+      setDeletingPhoto(null);
+      setSyncNoticeBanner('已從雲端移除該張門店實景照片，手機與電腦已同步更新。');
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `storefrontPhotos/${currentPhoto.id}`);
+      handleFirestoreError(err, OperationType.DELETE, `storefrontPhotos/${targetPhoto.id}`);
+      const msg = formatFirestoreActionError(err, '雲端刪除門店實景照片');
+      setDeleteError(msg);
+      if (isQuotaError(err)) {
+        setCloudError({ message: msg, isQuota: true });
+      }
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -329,6 +573,41 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       <div className="absolute bottom-0 left-10 w-80 h-80 bg-stone-200/40 rounded-full blur-3xl pointer-events-none -z-10" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {isOwner && (
+          <CloudSyncStatusBar
+            sectionLabel="門店實景輪播照片"
+            cloudError={cloudError}
+            onDismissError={() => setCloudError(null)}
+            onRetrySync={handleManualCloudRefresh}
+            syncNoticeBanner={syncNoticeBanner}
+            onDismissNotice={() => setSyncNoticeBanner(null)}
+            recoveryItems={unsyncedLocalPhotos.map((p) => ({
+              id: p.id,
+              title: p.caption || '門店實景照',
+              subtitle: `ID: ${p.id}`,
+              thumbnailUrl: p.imageUrl
+            }))}
+            isSyncing={isSyncingManual}
+            onSyncRecoveryItem={async (id) => {
+              const target = unsyncedLocalPhotos.find((p) => p.id === id);
+              if (!target || isSyncingManual) return;
+              setIsSyncingManual(true);
+              const ok = await syncStrandedStorefrontPhoto(target);
+              if (ok) {
+                setSyncNoticeBanner('已將該張門店實景照片補傳至雲端，手機現在也可以看到了！');
+              }
+              setIsSyncingManual(false);
+            }}
+            onDiscardRecoveryItem={(id) => {
+              setUnsyncedLocalPhotos((prev) => {
+                const next = prev.filter((p) => p.id !== id);
+                saveRecoveryQueue(STOREFRONT_RECOVERY_KEY, next);
+                return next;
+              });
+              setSyncNoticeBanner('已移除僅存於本機的未同步實景照暫存。');
+            }}
+          />
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
           {/* Left Column: Headlines & Brand Proposition (order-2 on mobile, order-1 on desktop) */}
           <div className="order-2 lg:order-1 lg:col-span-7 space-y-6">
@@ -559,7 +838,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </div>
 
                 {isOwner && (
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleManualCloudRefresh}
+                      disabled={isSyncingManual}
+                      className="inline-flex items-center gap-1 px-2 py-1.5 text-[11px] font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors disabled:opacity-60"
+                      title="檢查雲端最新實景照片"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isSyncingManual ? 'animate-spin' : ''}`} />
+                      <span>同步 ({cloudItemIds.size})</span>
+                    </button>
                     <button
                       type="button"
                       onClick={handleOpenUpload}
@@ -572,7 +861,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     {storefrontPhotos.length > 1 && (
                       <button
                         type="button"
-                        onClick={handleDeleteCurrentPhoto}
+                        onClick={handleRequestDeleteCurrentPhoto}
                         className="inline-flex items-center gap-1 px-2 py-1.5 text-[11px] font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
                         title="刪除目前這張照片"
                       >
@@ -724,7 +1013,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn"
-          onClick={() => setIsUploadModalOpen(false)}
         >
           <div
             className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-stone-200 overflow-y-auto max-h-[90vh]"
@@ -740,12 +1028,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     上傳門店實景照片
                   </h3>
                   <p className="text-[11px] text-stone-500">
-                    支援連續選取多張照片，上傳後立即同步首頁輪播
+                    點擊視窗外不會誤關 · 上傳成功後同步所有手機與電腦
                   </p>
                 </div>
               </div>
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={() => setIsUploadModalOpen(false)}
                 className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100"
               >
@@ -762,6 +1051,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               )}
 
               <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-semibold text-stone-700">選擇門店實景照片 *</span>
+                  {isProcessingImages && (
+                    <span className="text-[11px] font-semibold text-amber-800 animate-pulse">
+                      壓縮處理中...
+                    </span>
+                  )}
+                </div>
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -831,8 +1128,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
                 <button
                   type="button"
+                  disabled={isSaving}
                   onClick={() => setIsUploadModalOpen(false)}
-                  className="px-4 py-2 text-stone-600 hover:bg-stone-100 rounded-xl font-medium"
+                  className="px-4 py-2 text-stone-600 hover:bg-stone-100 rounded-xl font-medium disabled:opacity-50"
                 >
                   取消
                 </button>
@@ -842,10 +1140,92 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   className="px-5 py-2 bg-amber-900 hover:bg-amber-800 text-white font-semibold rounded-xl shadow-xs flex items-center gap-1.5 disabled:opacity-60"
                 >
                   <CheckCircle className="w-3.5 h-3.5" />
-                  <span>{isSaving ? '上傳同步中...' : '確認發佈實景照'}</span>
+                  <span>{isSaving ? '正在寫入雲端資料庫...' : '確認上傳至雲端發佈'}</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Delete Confirmation Modal */}
+      {deletingPhoto && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn"
+        >
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-stone-200">
+            <div className="flex items-start justify-between gap-3 border-b border-stone-200 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-serif-title font-bold text-stone-900 text-base">
+                    確定要刪除此門店實景照片？
+                  </h4>
+                  <p className="text-[11px] text-stone-500">
+                    刪除後將同步從手機、電腦、平板所有裝置移除
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => {
+                  setDeletingPhoto(null);
+                  setDeleteError(null);
+                }}
+                className="p-1 text-stone-400 hover:text-stone-600 rounded-lg"
+                title="關閉視窗"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-stone-50 border border-stone-200">
+              <img
+                src={deletingPhoto.imageUrl}
+                alt={deletingPhoto.caption || '門店實景'}
+                className="w-16 h-16 rounded-xl object-cover border border-stone-200 shrink-0"
+              />
+              <div className="min-w-0">
+                <div className="font-bold text-stone-900 text-xs truncate">
+                  {deletingPhoto.caption || '門店實景展示照'}
+                </div>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div className="p-2.5 bg-red-50 text-red-700 rounded-xl text-xs flex items-center gap-1.5 border border-red-200">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => {
+                  setDeletingPhoto(null);
+                  setDeleteError(null);
+                }}
+                className="px-4 py-2.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-xl transition-colors"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDeletePhoto}
+                className="px-5 py-2.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-60"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeleting ? '雲端刪除同步中...' : '確認刪除照片'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,18 +1,41 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ShowcasePhoto, INITIAL_SHOWCASE_PHOTOS, STORE_INFO } from '../data/catVillaData';
 import { MultiPhotoLightbox } from './MultiPhotoLightbox';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocsFromServer, onSnapshot, setDoc } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
 import { useStoreOwner } from '../utils/adminAuth';
 import { StoreOwnerAuthModal } from './StoreOwnerAuthModal';
+import { CloudErrorState, CloudSyncStatusBar } from './CloudSyncStatusBar';
+import {
+  fitImagesWithinFirestoreLimit,
+  formatFirestoreActionError,
+  isQuotaError,
+  loadRecoveryQueue,
+  saveRecoveryQueue
+} from '../utils/cloudSync';
 import {
   SHOWCASE_ADDED_EVENT,
   SHOWCASE_FOCUS_EVENT,
   SHOWCASE_STORAGE_KEY,
   ShowcaseSizeCategory
 } from '../utils/showcaseSync';
-import { Upload, Plus, Filter, Maximize2, Trash2, Edit3, CheckCircle, Image as ImageIcon, AlertCircle, ChevronDown, ChevronUp, Images } from 'lucide-react';
+import {
+  Upload,
+  Plus,
+  Filter,
+  Maximize2,
+  Trash2,
+  Edit3,
+  CheckCircle,
+  Image as ImageIcon,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Images,
+  RefreshCw,
+  X
+} from 'lucide-react';
 
 interface ShowcaseGalleryProps {
   onOpenImageZoom?: (title: string, imageUrl: string, subtitle?: string) => void;
@@ -20,6 +43,44 @@ interface ShowcaseGalleryProps {
 
 const STORAGE_KEY = SHOWCASE_STORAGE_KEY;
 const DELETED_SHOWCASE_KEY = 'hhcat_deleted_showcase_ids_v1';
+const SHOWCASE_RECOVERY_KEY = 'hhcat_showcase_unsynced_recovery_v1';
+const DEFAULT_SHOWCASE_IDS = new Set(INITIAL_SHOWCASE_PHOTOS.map((p) => p.id));
+
+const getLocalDeletedShowcaseIds = (): string[] => {
+  try {
+    const raw = localStorage.getItem(DELETED_SHOWCASE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+const addLocalDeletedShowcaseId = (id: string) => {
+  try {
+    const deletedIds = getLocalDeletedShowcaseIds();
+    if (!deletedIds.includes(id)) {
+      deletedIds.push(id);
+      localStorage.setItem(DELETED_SHOWCASE_KEY, JSON.stringify(deletedIds));
+    }
+  } catch (err) {
+    console.warn('Could not save deleted showcase id:', err);
+  }
+};
+
+const removeLocalDeletedShowcaseId = (id: string) => {
+  try {
+    const deletedIds = getLocalDeletedShowcaseIds();
+    if (deletedIds.includes(id)) {
+      localStorage.setItem(
+        DELETED_SHOWCASE_KEY,
+        JSON.stringify(deletedIds.filter((existing) => existing !== id))
+      );
+    }
+  } catch (err) {
+    console.warn('Could not remove deleted showcase id:', err);
+  }
+};
 
 export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
   const { isOwner, logout } = useStoreOwner();
@@ -30,6 +91,16 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+
+  // Cloud sync & recovery state
+  const [cloudStatus, setCloudStatus] = useState<'loading' | 'synced' | 'error'>('loading');
+  const [cloudError, setCloudError] = useState<CloudErrorState | null>(null);
+  const [cloudItemIds, setCloudItemIds] = useState<Set<string>>(() => new Set());
+  const [unsyncedLocalPhotos, setUnsyncedLocalPhotos] = useState<ShowcasePhoto[]>(() =>
+    loadRecoveryQueue<ShowcasePhoto>(SHOWCASE_RECOVERY_KEY)
+  );
+  const [isSyncingManual, setIsSyncingManual] = useState(false);
+  const [syncNoticeBanner, setSyncNoticeBanner] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -46,6 +117,14 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
   const [uploadImages, setUploadImages] = useState<string[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
+  const [isDraggingImages, setIsDraggingImages] = useState(false);
+  const imageDragDepthRef = useRef(0);
+
+  // In-app delete confirmation modal
+  const [deletingPhoto, setDeletingPhoto] = useState<ShowcasePhoto | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
@@ -61,20 +140,155 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load photos: from localStorage and subscribe to Firestore for real-time cloud sync across phones & PCs
+  const applyFirestoreSnapshotDocs = useCallback(
+    (docs: Array<{ id: string; data: () => Record<string, unknown> }>) => {
+      const deletedFromCloud = new Set<string>();
+      const remotePhotos: Array<ShowcasePhoto & { updatedAt?: string }> = [];
+
+      docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const resolvedId = (typeof data.id === 'string' && data.id) || docSnap.id;
+        if (data.deleted === true) {
+          deletedFromCloud.add(resolvedId);
+        } else if (typeof data.fullPhotoData === 'string') {
+          try {
+            const parsed = JSON.parse(data.fullPhotoData) as ShowcasePhoto;
+            if (parsed && parsed.id) {
+              remotePhotos.push({
+                ...parsed,
+                updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : undefined
+              });
+            }
+          } catch (e) {
+            console.warn(e);
+          }
+        } else if (resolvedId && typeof data.title === 'string' && typeof data.imageUrl === 'string') {
+          const fallbackImgs =
+            Array.isArray(data.images) && data.images.length > 0
+              ? data.images.filter((x): x is string => typeof x === 'string' && Boolean(x))
+              : [data.imageUrl];
+          const dimText =
+            typeof data.dimensions === 'string' && data.dimensions ? data.dimensions : '150-60-120';
+          const inferredCat = dimText.split('-')[0];
+          const validCat: ShowcasePhoto['sizeCategory'] =
+            data.sizeCategory === '60' ||
+            data.sizeCategory === '90' ||
+            data.sizeCategory === '120' ||
+            data.sizeCategory === '150' ||
+            data.sizeCategory === '180' ||
+            data.sizeCategory === 'custom'
+              ? data.sizeCategory
+              : inferredCat === '60' ||
+                  inferredCat === '90' ||
+                  inferredCat === '120' ||
+                  inferredCat === '150' ||
+                  inferredCat === '180'
+                ? inferredCat
+                : '150';
+
+          remotePhotos.push({
+            id: resolvedId,
+            title: data.title,
+            sizeCategory: validCat,
+            dimensionsText: dimText,
+            imageUrl: fallbackImgs[0] || data.imageUrl,
+            images: fallbackImgs,
+            customerNote:
+              typeof data.description === 'string' && data.description
+                ? data.description
+                : '店主精選客製實品照',
+            date: typeof data.date === 'string' && data.date ? data.date : '客製實品照',
+            tags: Array.isArray(data.tags)
+              ? data.tags.filter((x): x is string => typeof x === 'string')
+              : ['客製實品'],
+            isCustomUpload: true,
+            updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : undefined
+          });
+        }
+      });
+
+      remotePhotos.sort((a, b) => {
+        const ta = a.updatedAt ? Date.parse(a.updatedAt) : 0;
+        const tb = b.updatedAt ? Date.parse(b.updatedAt) : 0;
+        if (!Number.isNaN(tb) && !Number.isNaN(ta) && tb !== ta) {
+          return tb - ta;
+        }
+        return b.id.localeCompare(a.id);
+      });
+
+      const mergedDeletedIds = new Set<string>([
+        ...Array.from(deletedFromCloud),
+        ...getLocalDeletedShowcaseIds()
+      ]);
+
+      const activeDefaults = INITIAL_SHOWCASE_PHOTOS.filter(
+        (orig) => !remotePhotos.some((r) => r.id === orig.id) && !mergedDeletedIds.has(orig.id)
+      );
+      const activeRemotes: ShowcasePhoto[] = remotePhotos
+        .filter((r) => !mergedDeletedIds.has(r.id))
+        .map(({ updatedAt: _u, ...rest }) => rest);
+      const cloudIdsSet = new Set(activeRemotes.map((r) => r.id));
+
+      // Rescue any custom showcase items stranded only on this device
+      const strandedMap = new Map<string, ShowcasePhoto>();
+      loadRecoveryQueue<ShowcasePhoto>(SHOWCASE_RECOVERY_KEY).forEach((p) => {
+        if (p && p.id && !cloudIdsSet.has(p.id) && !mergedDeletedIds.has(p.id)) {
+          strandedMap.set(p.id, p);
+        }
+      });
+
+      try {
+        const cachedRaw = localStorage.getItem(STORAGE_KEY);
+        if (cachedRaw) {
+          const parsed = JSON.parse(cachedRaw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((p) => {
+              if (
+                p &&
+                p.id &&
+                p.isCustomUpload &&
+                !DEFAULT_SHOWCASE_IDS.has(p.id) &&
+                !cloudIdsSet.has(p.id) &&
+                !mergedDeletedIds.has(p.id)
+              ) {
+                strandedMap.set(p.id, p as ShowcasePhoto);
+              }
+            });
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+
+      const strandedList = Array.from(strandedMap.values());
+      saveRecoveryQueue(SHOWCASE_RECOVERY_KEY, strandedList);
+
+      const nextPhotos = [...activeRemotes, ...activeDefaults];
+      setCloudStatus('synced');
+      setCloudError(null);
+      setCloudItemIds(cloudIdsSet);
+      setUnsyncedLocalPhotos(strandedList);
+      setPhotos(nextPhotos);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextPhotos));
+      } catch (err) {
+        console.warn('Could not sync showcase cache:', err);
+      }
+    },
+    []
+  );
+
+  // Load initial cache and subscribe to Firestore for real-time cloud sync across phones & PCs
   useEffect(() => {
     try {
-      const deletedJson = localStorage.getItem(DELETED_SHOWCASE_KEY);
-      const deletedIds: string[] = deletedJson ? JSON.parse(deletedJson) : [];
-
+      const deletedIds = getLocalDeletedShowcaseIds();
       const saved = localStorage.getItem(STORAGE_KEY);
       let combined: ShowcasePhoto[] = [];
       if (saved) {
         const parsed: ShowcasePhoto[] = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const customs = parsed.filter((p) => p && p.isCustomUpload);
-          const initialIds = new Set(INITIAL_SHOWCASE_PHOTOS.map((p) => p.id));
-          const validCustoms = customs.filter((p) => !initialIds.has(p.id));
+          const validCustoms = customs.filter((p) => !DEFAULT_SHOWCASE_IDS.has(p.id));
           combined = [...validCustoms, ...INITIAL_SHOWCASE_PHOTOS];
         } else {
           combined = INITIAL_SHOWCASE_PHOTOS;
@@ -88,11 +302,12 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
       setPhotos(INITIAL_SHOWCASE_PHOTOS);
     }
 
-    // Listen to instant transfers from InStockSection & focus requests
+    // Listen to instant transfers from InStockSection (only dispatched AFTER Firestore write succeeds) & focus requests
     const handleShowcaseAdded = (e: Event) => {
       const added = (e as CustomEvent<ShowcasePhoto>).detail;
       if (!added || !added.id) return;
       setPhotos((prev) => [added, ...prev.filter((p) => p.id !== added.id)]);
+      setCloudItemIds((prev) => new Set(prev).add(added.id));
     };
 
     const handleShowcaseFocus = (e: Event) => {
@@ -107,56 +322,18 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
     window.addEventListener(SHOWCASE_ADDED_EVENT, handleShowcaseAdded);
     window.addEventListener(SHOWCASE_FOCUS_EVENT, handleShowcaseFocus);
 
-    // Subscribe to Firestore for live showcase photo sync
     const unsubscribe = onSnapshot(
       collection(db, 'showcasePhotos'),
       (snapshot) => {
-        if (!snapshot.empty) {
-          const deletedFromCloud = new Set<string>();
-          const remotePhotos: ShowcasePhoto[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            if (data.deleted === true) {
-              deletedFromCloud.add(data.id || docSnap.id);
-            } else if (data.fullPhotoData) {
-              try {
-                remotePhotos.push(JSON.parse(data.fullPhotoData));
-              } catch (e) {
-                console.warn(e);
-              }
-            } else if (data.id && data.title && data.imageUrl) {
-              const fallbackImgs = Array.isArray(data.images) && data.images.length > 0 ? data.images : [data.imageUrl];
-              remotePhotos.push({
-                id: data.id,
-                title: data.title,
-                sizeCategory: (data.sizeCategory as ShowcasePhoto['sizeCategory']) || (data.dimensions?.split('-')[0] as ShowcasePhoto['sizeCategory']) || '150',
-                dimensionsText: data.dimensions || '150-60-120',
-                imageUrl: fallbackImgs[0] || data.imageUrl,
-                images: fallbackImgs,
-                customerNote: data.description || '店主精選客製實品照',
-                date: data.date || '客製實品照',
-                tags: data.tags || ['客製實品'],
-                isCustomUpload: true
-              });
-            }
-          });
-
-          let deletedIds: string[] = [];
-          try {
-            const deletedJson = localStorage.getItem(DELETED_SHOWCASE_KEY);
-            deletedIds = deletedJson ? JSON.parse(deletedJson) : [];
-          } catch {}
-          setPhotos(() => {
-            const remainingDefaults = INITIAL_SHOWCASE_PHOTOS.filter(
-              (orig) => !remotePhotos.some((r) => r.id === orig.id) && !deletedFromCloud.has(orig.id)
-            );
-            const activeRemotes = remotePhotos.filter((r) => !deletedFromCloud.has(r.id));
-            return [...activeRemotes, ...remainingDefaults].filter((p) => !deletedIds.includes(p.id));
-          });
-        }
+        applyFirestoreSnapshotDocs(snapshot.docs);
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, 'showcasePhotos');
+        setCloudStatus('error');
+        setCloudError({
+          message: formatFirestoreActionError(error, '讀取雲端客製實品相冊'),
+          isQuota: isQuotaError(error)
+        });
       }
     );
 
@@ -165,32 +342,167 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
       window.removeEventListener(SHOWCASE_FOCUS_EVENT, handleShowcaseFocus);
       unsubscribe();
     };
-  }, []);
+  }, [applyFirestoreSnapshotDocs]);
 
-  const handleMultipleFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const handleManualCloudRefresh = async () => {
+    if (isSyncingManual) return;
+    setIsSyncingManual(true);
+    setSyncNoticeBanner(null);
+    try {
+      const serverSnap = await getDocsFromServer(collection(db, 'showcasePhotos'));
+      applyFirestoreSnapshotDocs(serverSnap.docs);
+      const activeCount = serverSnap.docs.filter((d) => d.data().deleted !== true).length;
+      setSyncNoticeBanner(
+        `已完成雲端相冊校對（雲端共 ${activeCount} 筆客製實品），手機與電腦現為完全一致內容。`
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.GET, 'showcasePhotos');
+      setCloudStatus('error');
+      setCloudError({
+        message: formatFirestoreActionError(err, '手動重整雲端相冊'),
+        isQuota: isQuotaError(err)
+      });
+    } finally {
+      setIsSyncingManual(false);
+    }
+  };
+
+  const syncStrandedShowcasePhoto = async (localPhoto: ShowcasePhoto): Promise<boolean> => {
+    const imgs =
+      localPhoto.images && localPhoto.images.length > 0
+        ? localPhoto.images.filter(Boolean)
+        : [localPhoto.imageUrl].filter(Boolean);
+    const nowIso = new Date().toISOString();
+    const baseMeta = {
+      id: localPhoto.id,
+      title: localPhoto.title,
+      sizeCategory: localPhoto.sizeCategory,
+      dimensions: localPhoto.dimensionsText,
+      description: localPhoto.customerNote,
+      tags: localPhoto.tags || ['客製實品'],
+      date: localPhoto.date || '客製實品照',
+      isCustomUpload: true,
+      deleted: false,
+      updatedAt: nowIso
+    };
 
     try {
+      const fitted = await fitImagesWithinFirestoreLimit(imgs, baseMeta, {
+        primaryField: 'imageUrl',
+        arrayField: 'images'
+      });
+
+      if (!fitted.ok) {
+        setCloudError({ message: fitted.reason, isQuota: false });
+        return false;
+      }
+
+      await setDoc(doc(db, 'showcasePhotos', localPhoto.id), {
+        ...baseMeta,
+        imageUrl: fitted.images[0],
+        images: fitted.images
+      });
+
+      const syncedPhoto: ShowcasePhoto = {
+        ...localPhoto,
+        imageUrl: fitted.images[0],
+        images: fitted.images
+      };
+
+      removeLocalDeletedShowcaseId(localPhoto.id);
+      setUnsyncedLocalPhotos((prev) => {
+        const next = prev.filter((p) => p.id !== localPhoto.id);
+        saveRecoveryQueue(SHOWCASE_RECOVERY_KEY, next);
+        return next;
+      });
+      setCloudItemIds((prev) => new Set(prev).add(localPhoto.id));
+      setCloudStatus('synced');
+      setCloudError(null);
+      setPhotos((prev) => {
+        const updated = [syncedPhoto, ...prev.filter((p) => p.id !== syncedPhoto.id)];
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      return true;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `showcasePhotos/${localPhoto.id}`);
+      const msg = formatFirestoreActionError(err, `補傳「${localPhoto.title}」至雲端`);
+      setCloudError({ message: msg, isQuota: isQuotaError(err) });
+      if (isQuotaError(err)) setCloudStatus('error');
+      return false;
+    }
+  };
+
+  const handleSyncRecoveryItem = async (photoId: string) => {
+    const target = unsyncedLocalPhotos.find((p) => p.id === photoId);
+    if (!target || isSyncingManual) return;
+    setIsSyncingManual(true);
+    setSyncNoticeBanner(null);
+    const ok = await syncStrandedShowcasePhoto(target);
+    if (ok) {
+      setSyncNoticeBanner(`已將「${target.title}」壓縮並補傳至雲端，手機現在也可以看到了！`);
+    }
+    setIsSyncingManual(false);
+  };
+
+  const handleSyncAllRecoveryItems = async () => {
+    if (isSyncingManual || unsyncedLocalPhotos.length === 0) return;
+    setIsSyncingManual(true);
+    setSyncNoticeBanner(null);
+    const queue = [...unsyncedLocalPhotos];
+    let successCount = 0;
+    for (const p of queue) {
+      const ok = await syncStrandedShowcasePhoto(p);
+      if (ok) successCount += 1;
+      else break;
+    }
+    if (successCount > 0) {
+      setSyncNoticeBanner(`已成功補傳 ${successCount} 筆實品作品至雲端資料庫，手機／電腦皆可看到！`);
+    }
+    setIsSyncingManual(false);
+  };
+
+  const hasDraggedFiles = (e: React.DragEvent) =>
+    Array.from(e.dataTransfer.types || []).includes('Files');
+
+  const processImageFiles = async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList).filter((file) => file.type.startsWith('image/'));
+    if (files.length === 0) {
+      setUploadError('請拖曳或選擇有效圖片檔案（JPG / PNG / WebP）');
+      return;
+    }
+
+    try {
+      setIsProcessingImages(true);
       setUploadError(null);
       const compressedList: string[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (file.type.startsWith('image/')) {
-          const compressed = await compressImage(file, 960, 0.74);
-          compressedList.push(compressed);
-        }
+      for (const file of files) {
+        const compressed = await compressImage(file, 840, 0.7);
+        compressedList.push(compressed);
       }
       if (compressedList.length > 0) {
-        const updated = [...uploadImages, ...compressedList];
-        setUploadImages(updated);
-        setPreviewImage(updated[0]);
+        setUploadImages((prev) => {
+          const updated = [...prev, ...compressedList];
+          setPreviewImage(updated[0]);
+          return updated;
+        });
       }
     } catch {
       setUploadError('多張照片處理失敗，請換一張再試');
     } finally {
-      e.target.value = '';
+      setIsProcessingImages(false);
     }
+  };
+
+  const handleMultipleFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await processImageFiles(files);
+    e.target.value = '';
   };
 
   const resetUploadForm = () => {
@@ -201,10 +513,13 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
     setPreviewImage(null);
     setUploadImages([]);
     setUploadError(null);
+    setIsDraggingImages(false);
+    imageDragDepthRef.current = 0;
   };
 
   const handleSavePhoto = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUploading) return;
     const finalImages = uploadImages.length > 0 ? uploadImages : (previewImage ? [previewImage] : []);
     if (finalImages.length === 0) {
       setUploadError('請至少上傳一張貓別墅實品照片！');
@@ -217,9 +532,12 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
     }
 
     setIsUploading(true);
+    setUploadError(null);
 
     const targetId = editingPhotoId || `custom-${Date.now()}`;
-    const newPhoto: ShowcasePhoto = {
+    const nowIso = new Date().toISOString();
+    const parsedTags = uploadTags.split(/[,， ]+/).filter(Boolean);
+    const draftPhoto: ShowcasePhoto = {
       id: targetId,
       title: uploadTitle.trim(),
       sizeCategory: uploadSizeCategory,
@@ -228,45 +546,88 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
       images: finalImages,
       customerNote: uploadCustomerNote.trim() || '店主精選客製實品照，支援同款專屬訂製。',
       date: editingPhotoId ? '已更新實拍' : '剛剛新增',
-      tags: uploadTags.split(/[,， ]+/).filter(Boolean),
+      tags: parsedTags.length > 0 ? parsedTags : ['客製實品'],
       isCustomUpload: true
     };
 
-    const existingIdx = photos.findIndex((p) => p.id === targetId);
-    const updated =
-      existingIdx >= 0
-        ? photos.map((p) => (p.id === targetId ? newPhoto : p))
-        : [newPhoto, ...photos];
-    setPhotos(updated);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch (err) {
-      console.warn('LocalStorage limit reached or disabled:', err);
-    }
+    const firestoreMeta = {
+      id: targetId,
+      title: draftPhoto.title,
+      sizeCategory: draftPhoto.sizeCategory,
+      dimensions: draftPhoto.dimensionsText,
+      description: draftPhoto.customerNote,
+      tags: draftPhoto.tags,
+      date: draftPhoto.date,
+      isCustomUpload: true,
+      deleted: false,
+      updatedAt: nowIso
+    };
 
     try {
-      await setDoc(doc(db, 'showcasePhotos', targetId), {
-        id: targetId,
-        title: newPhoto.title,
-        sizeCategory: newPhoto.sizeCategory,
-        dimensions: newPhoto.dimensionsText,
-        description: newPhoto.customerNote,
-        imageUrl: newPhoto.imageUrl,
-        images: newPhoto.images || [],
-        tags: newPhoto.tags,
-        date: newPhoto.date,
-        isCustomUpload: true,
-        deleted: false,
-        updatedAt: new Date().toISOString()
+      const fitted = await fitImagesWithinFirestoreLimit(finalImages, firestoreMeta, {
+        primaryField: 'imageUrl',
+        arrayField: 'images'
       });
+
+      if (!fitted.ok) {
+        setUploadError(fitted.reason);
+        setIsUploading(false);
+        return;
+      }
+
+      // Firestore-first write so we never fake success when cloud rejects/exceeds quota
+      await setDoc(doc(db, 'showcasePhotos', targetId), {
+        ...firestoreMeta,
+        imageUrl: fitted.images[0],
+        images: fitted.images
+      });
+
+      const syncedPhoto: ShowcasePhoto = {
+        ...draftPhoto,
+        imageUrl: fitted.images[0],
+        images: fitted.images
+      };
+
+      removeLocalDeletedShowcaseId(targetId);
+
+      const existingIdx = photos.findIndex((p) => p.id === targetId);
+      const updated =
+        existingIdx >= 0
+          ? photos.map((p) => (p.id === targetId ? syncedPhoto : p))
+          : [syncedPhoto, ...photos];
+      setPhotos(updated);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch (err) {
+        console.warn('LocalStorage limit reached or disabled:', err);
+      }
+
+      setUnsyncedLocalPhotos((prev) => {
+        const next = prev.filter((p) => p.id !== targetId);
+        saveRecoveryQueue(SHOWCASE_RECOVERY_KEY, next);
+        return next;
+      });
+      setCloudItemIds((prev) => new Set(prev).add(targetId));
+      setCloudStatus('synced');
+      setCloudError(null);
+      setSyncNoticeBanner(
+        `「${syncedPhoto.title}」已上傳並寫入雲端資料庫，手機、電腦、平板現在皆會即時顯示！`
+      );
+
+      setIsUploadModalOpen(false);
+      resetUploadForm();
+      setSelectedSize(syncedPhoto.sizeCategory);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `showcasePhotos/${targetId}`);
+      const msg = formatFirestoreActionError(err, '上傳客製實品照至雲端');
+      setUploadError(msg);
+      if (isQuotaError(err)) {
+        setCloudStatus('error');
+        setCloudError({ message: msg, isQuota: true });
+      }
+    } finally {
+      setIsUploading(false);
     }
-
-    setIsUploading(false);
-    setIsUploadModalOpen(false);
-    resetUploadForm();
-    setSelectedSize(uploadSizeCategory);
   };
 
   const handleOpenUpload = (targetSize?: '60' | '90' | '120' | '150' | '180' | 'custom') => {
@@ -305,43 +666,62 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
     setIsUploadModalOpen(true);
   };
 
-  const handleDeletePhoto = async (photo: ShowcasePhoto, e: React.MouseEvent) => {
+  const handleRequestDeletePhoto = (photo: ShowcasePhoto, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isOwner) {
       setAuthActionTitle('刪除客製相冊照片');
       setIsAuthModalOpen(true);
       return;
     }
-    if (!window.confirm(`確定要刪除「${photo.title}」這張客製實品照片嗎？`)) return;
+    setDeleteError(null);
+    setDeletingPhoto(photo);
+  };
+
+  const handleConfirmDeletePhoto = async () => {
+    if (!deletingPhoto || isDeleting) return;
+    const targetPhoto = deletingPhoto;
+
+    setIsDeleting(true);
+    setDeleteError(null);
 
     try {
-      const deletedJson = localStorage.getItem(DELETED_SHOWCASE_KEY);
-      const deletedIds: string[] = deletedJson ? JSON.parse(deletedJson) : [];
-      if (!deletedIds.includes(photo.id)) {
-        deletedIds.push(photo.id);
-        localStorage.setItem(DELETED_SHOWCASE_KEY, JSON.stringify(deletedIds));
-      }
-    } catch (err) {
-      console.error(err);
-    }
-
-    const updated = photos.filter((p) => p.id !== photo.id);
-    setPhotos(updated);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch (err) {
-      console.error(err);
-    }
-
-    // Mark deleted in Cloud Firestore so both default & custom photos stay deleted across devices
-    try {
-      await setDoc(doc(db, 'showcasePhotos', photo.id), {
-        id: photo.id,
+      await setDoc(doc(db, 'showcasePhotos', targetPhoto.id), {
+        id: targetPhoto.id,
         deleted: true,
         updatedAt: new Date().toISOString()
       });
+
+      addLocalDeletedShowcaseId(targetPhoto.id);
+      const updated = photos.filter((p) => p.id !== targetPhoto.id);
+      setPhotos(updated);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch (err) {
+        console.warn(err);
+      }
+
+      setUnsyncedLocalPhotos((prev) => {
+        const next = prev.filter((p) => p.id !== targetPhoto.id);
+        saveRecoveryQueue(SHOWCASE_RECOVERY_KEY, next);
+        return next;
+      });
+      setCloudItemIds((prev) => {
+        const next = new Set(prev);
+        next.delete(targetPhoto.id);
+        return next;
+      });
+      setDeletingPhoto(null);
+      setSyncNoticeBanner(`已將「${targetPhoto.title}」從雲端與所有裝置的客製實品相冊移除。`);
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `showcasePhotos/${photo.id}`);
+      handleFirestoreError(err, OperationType.DELETE, `showcasePhotos/${targetPhoto.id}`);
+      const msg = formatFirestoreActionError(err, '雲端刪除實品照');
+      setDeleteError(msg);
+      if (isQuotaError(err)) {
+        setCloudStatus('error');
+        setCloudError({ message: msg, isQuota: true });
+      }
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -391,9 +771,19 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
             </p>
           </div>
 
-          {/* Action: Open Upload Modal (Restricted to Store Owner) */}
+          {/* Action: Open Upload Modal & Cloud Sync Check (Restricted to Store Owner) */}
           {isOwner && (
-            <div className="flex items-center gap-2 self-start md:self-auto shrink-0 z-10">
+            <div className="flex flex-wrap items-center gap-2 self-start md:self-auto shrink-0 z-10">
+              <button
+                type="button"
+                onClick={handleManualCloudRefresh}
+                disabled={isSyncingManual}
+                className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold text-stone-700 bg-white hover:bg-stone-100 border border-stone-300 rounded-xl shadow-2xs transition-colors disabled:opacity-60"
+                title="向雲端資料庫重新抓取最新清單，確認手機與電腦完全一致"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingManual ? 'animate-spin' : ''}`} />
+                <span>同步檢查 ({cloudItemIds.size} 筆雲端)</span>
+              </button>
               <button
                 type="button"
                 onClick={(e) => {
@@ -417,6 +807,35 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
             </div>
           )}
         </div>
+
+        {/* Owner Cloud Status, Quota Alerts & Stranded Recovery */}
+        {isOwner && (
+          <CloudSyncStatusBar
+            sectionLabel="客製實品相冊"
+            cloudError={cloudError}
+            onDismissError={() => setCloudError(null)}
+            onRetrySync={handleManualCloudRefresh}
+            syncNoticeBanner={syncNoticeBanner}
+            onDismissNotice={() => setSyncNoticeBanner(null)}
+            recoveryItems={unsyncedLocalPhotos.map((p) => ({
+              id: p.id,
+              title: p.title,
+              subtitle: `${p.dimensionsText} · 共 ${(p.images && p.images.length) || 1} 張照片`,
+              thumbnailUrl: (p.images && p.images[0]) || p.imageUrl
+            }))}
+            isSyncing={isSyncingManual}
+            onSyncRecoveryItem={handleSyncRecoveryItem}
+            onDiscardRecoveryItem={(id) => {
+              setUnsyncedLocalPhotos((prev) => {
+                const next = prev.filter((p) => p.id !== id);
+                saveRecoveryQueue(SHOWCASE_RECOVERY_KEY, next);
+                return next;
+              });
+              setSyncNoticeBanner('已移除該筆僅存於本機的未同步相冊暫存資料。');
+            }}
+            onSyncAllRecoveryItems={handleSyncAllRecoveryItems}
+          />
+        )}
 
         {/* Size Filter Pills / Segmented Bar */}
         <div className="flex flex-wrap items-center gap-2 pb-6 border-b border-stone-200">
@@ -461,7 +880,6 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
             );
           })}
 
-          {/* New Custom Size Category */}
           <button
             type="button"
             onClick={() => {
@@ -474,7 +892,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
                 : 'bg-white text-stone-700 hover:bg-stone-100 border border-stone-200'
             }`}
           >
-            <span>✨ 客製化尺寸 ({photos.filter((p) => p.sizeCategory === 'custom').length})</span>
+            <span>客製化尺寸 ({photos.filter((p) => p.sizeCategory === 'custom').length})</span>
           </button>
         </div>
 
@@ -557,7 +975,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={(e) => handleDeletePhoto(photo, e)}
+                        onClick={(e) => handleRequestDeletePhoto(photo, e)}
                         className="bg-red-600/95 hover:bg-red-700 text-white px-2.5 py-1 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-xs"
                         title="刪除此相片卡片"
                       >
@@ -567,6 +985,28 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Owner Cloud Sync Strip */}
+                {isOwner && (
+                  <div className="px-4 pt-2.5 pb-0 flex items-center justify-between text-[10px]">
+                    {cloudItemIds.has(photo.id) ? (
+                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                        雲端已同步（手機／電腦皆可見）
+                      </span>
+                    ) : DEFAULT_SHOWCASE_IDS.has(photo.id) ? (
+                      <span className="inline-flex items-center gap-1 font-semibold text-stone-500">
+                        <span className="w-1.5 h-1.5 rounded-full bg-stone-400" />
+                        系統內建作品（所有裝置皆有）
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 font-semibold text-amber-800">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
+                        {cloudStatus === 'error' ? '離線／額度滿快取中' : '等待雲端確認...'}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Details Footer */}
                 <div className="p-4 flex-1 flex flex-col justify-between space-y-2">
@@ -684,14 +1124,16 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
                       {editingPhotoId ? '編輯客製實品與多角度照片' : '上傳客製實品照片'}
                     </h3>
                     <p className="text-xs text-stone-500">
-                      支援連續多選上傳（第 1 張為主圖，其餘為開門/關門/內部/內飾圖）
+                      點擊視窗外不會誤關 · 支援桌面直接拖入或連續多選圖片
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
+                  disabled={isUploading}
                   onClick={() => setIsUploadModalOpen(false)}
                   className="text-stone-400 hover:text-stone-700 text-lg font-bold p-1"
+                  title="關閉視窗"
                 >
                   ✕
                 </button>
@@ -705,11 +1147,50 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
                   </div>
                 )}
 
-                {/* Image Picker */}
-                <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    實品照片檔案 * (支援連續多選上傳：主圖、開門、關門、內部、內飾等)
-                  </label>
+                {/* Image Picker with Desktop Drag & Drop */}
+                <div
+                  onDragEnter={(e) => {
+                    if (!hasDraggedFiles(e)) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    imageDragDepthRef.current += 1;
+                    setIsDraggingImages(true);
+                  }}
+                  onDragOver={(e) => {
+                    if (!hasDraggedFiles(e)) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.dataTransfer.dropEffect = 'copy';
+                  }}
+                  onDragLeave={(e) => {
+                    if (!hasDraggedFiles(e)) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    imageDragDepthRef.current = Math.max(0, imageDragDepthRef.current - 1);
+                    if (imageDragDepthRef.current === 0) setIsDraggingImages(false);
+                  }}
+                  onDrop={async (e) => {
+                    if (!hasDraggedFiles(e)) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    imageDragDepthRef.current = 0;
+                    setIsDraggingImages(false);
+                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                      await processImageFiles(e.dataTransfer.files);
+                    }
+                  }}
+                  className="relative rounded-xl"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-stone-700">
+                      實品照片檔案 * (支援桌面拖入／連續多選，第 1 張為主圖)
+                    </label>
+                    {isProcessingImages && (
+                      <span className="text-[11px] font-semibold text-amber-800 animate-pulse">
+                        壓縮處理中...
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -718,6 +1199,14 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
                     multiple
                     className="hidden"
                   />
+
+                  {isDraggingImages && (
+                    <div className="absolute inset-0 z-20 rounded-xl border-2 border-dashed border-amber-700 bg-amber-50/95 backdrop-blur-xs flex flex-col items-center justify-center text-amber-950 pointer-events-none">
+                      <Upload className="w-8 h-8 mb-1.5 text-amber-800 animate-bounce" />
+                      <span className="font-bold text-sm">放開滑鼠即可直接上傳照片</span>
+                    </div>
+                  )}
+
                   {uploadImages.length > 0 ? (
                     <div className="space-y-2">
                       <div className="relative aspect-16/9 bg-stone-100 rounded-xl overflow-hidden border border-stone-200 flex items-center justify-center">
@@ -734,11 +1223,29 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
                           + 繼續添加照片 (可多選)
                         </button>
                       </div>
-                      {/* Thumbnails */}
                       <div className="flex gap-2 overflow-x-auto pb-2">
                         {uploadImages.map((imgUrl, i) => (
-                          <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-stone-300 shrink-0">
-                            <img src={imgUrl} alt={`預覽 ${i + 1}`} className="w-full h-full object-cover" />
+                          <div
+                            key={i}
+                            className={`relative w-16 h-16 rounded-lg overflow-hidden border-2 shrink-0 group ${
+                              i === 0 ? 'border-amber-800' : 'border-stone-300'
+                            }`}
+                          >
+                            <img
+                              src={imgUrl}
+                              alt={`預覽 ${i + 1}`}
+                              onClick={() => {
+                                if (i > 0) {
+                                  const next = [...uploadImages];
+                                  const [chosen] = next.splice(i, 1);
+                                  next.unshift(chosen);
+                                  setUploadImages(next);
+                                  setPreviewImage(next[0]);
+                                }
+                              }}
+                              className="w-full h-full object-cover cursor-pointer"
+                              title={i === 0 ? '目前為主圖' : '點擊設為主圖'}
+                            />
                             <button
                               type="button"
                               onClick={() => {
@@ -767,7 +1274,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
                     >
                       <Upload className="w-8 h-8 text-stone-400 mx-auto mb-2" />
                       <p className="text-xs font-medium text-stone-700">
-                        點擊連續上傳多張實拍照片（可多選）
+                        從桌面拖曳多張照片到此處，或點擊批次選取上傳
                       </p>
                       <p className="text-[11px] text-stone-400 mt-1">
                         支援一次選取多張主圖、開關門、內部及配件實拍
@@ -865,21 +1372,113 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
                 <div className="pt-3 border-t border-stone-200 flex items-center justify-end gap-2">
                   <button
                     type="button"
+                    disabled={isUploading}
                     onClick={() => setIsUploadModalOpen(false)}
-                    className="px-4 py-2 text-xs font-medium text-stone-600 hover:bg-stone-100 rounded-lg"
+                    className="px-4 py-2 text-xs font-medium text-stone-600 hover:bg-stone-100 rounded-lg disabled:opacity-50"
                   >
                     取消
                   </button>
                   <button
                     type="submit"
                     disabled={isUploading}
-                    className="px-5 py-2 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+                    className="px-5 py-2 text-xs font-semibold text-white bg-amber-900 hover:bg-amber-800 rounded-lg shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-60"
                   >
                     <CheckCircle className="w-3.5 h-3.5" />
-                    <span>{isUploading ? '儲存中...' : editingPhotoId ? '儲存變更' : '確認上傳發佈'}</span>
+                    <span>
+                      {isUploading
+                        ? '正在寫入雲端資料庫...'
+                        : editingPhotoId
+                          ? '儲存並同步雲端'
+                          : '確認上傳至雲端發佈'}
+                    </span>
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* In-App Delete Confirmation Modal */}
+        {deletingPhoto && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn"
+          >
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-stone-200">
+              <div className="flex items-start justify-between gap-3 border-b border-stone-200 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+                    <Trash2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-serif-title font-bold text-stone-900 text-base">
+                      確定要刪除此客製實品照片？
+                    </h4>
+                    <p className="text-[11px] text-stone-500">
+                      刪除後將同步從手機、電腦、平板所有裝置移除
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => {
+                    setDeletingPhoto(null);
+                    setDeleteError(null);
+                  }}
+                  className="p-1 text-stone-400 hover:text-stone-600 rounded-lg"
+                  title="關閉視窗"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 rounded-2xl bg-stone-50 border border-stone-200">
+                <img
+                  src={(deletingPhoto.images && deletingPhoto.images[0]) || deletingPhoto.imageUrl}
+                  alt={deletingPhoto.title}
+                  className="w-16 h-16 rounded-xl object-cover border border-stone-200 shrink-0"
+                />
+                <div className="min-w-0">
+                  <div className="inline-block px-2 py-0.5 rounded bg-amber-900 text-white text-[10px] font-bold font-mono mb-1">
+                    {deletingPhoto.dimensionsText}
+                  </div>
+                  <div className="font-bold text-stone-900 text-xs truncate">
+                    {deletingPhoto.title}
+                  </div>
+                </div>
+              </div>
+
+              {deleteError && (
+                <div className="p-2.5 bg-red-50 text-red-700 rounded-xl text-xs flex items-center gap-1.5 border border-red-200">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => {
+                    setDeletingPhoto(null);
+                    setDeleteError(null);
+                  }}
+                  className="px-4 py-2.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-xl transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleConfirmDeletePhoto}
+                  className="px-5 py-2.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-60"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{isDeleting ? '雲端刪除同步中...' : '確認刪除實品'}</span>
+                </button>
+              </div>
             </div>
           </div>
         )}

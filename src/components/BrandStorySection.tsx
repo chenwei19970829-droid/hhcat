@@ -1,12 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   HUA_HUA_STORY,
   HuaHuaPhoto,
   STORE_INFO
 } from '../data/catVillaData';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, doc, getDocsFromServer, onSnapshot, setDoc } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
 import { useStoreOwner } from '../utils/adminAuth';
 import { StoreOwnerAuthModal } from './StoreOwnerAuthModal';
+import { CloudErrorState, CloudSyncStatusBar } from './CloudSyncStatusBar';
+import {
+  fitImagesWithinFirestoreLimit,
+  formatFirestoreActionError,
+  isQuotaError,
+  loadRecoveryQueue,
+  saveRecoveryQueue
+} from '../utils/cloudSync';
 import {
   Sparkles,
   Camera,
@@ -18,7 +28,10 @@ import {
   Instagram,
   Facebook,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  RefreshCw,
+  AlertCircle,
+  X
 } from 'lucide-react';
 
 interface BrandStorySectionProps {
@@ -27,6 +40,44 @@ interface BrandStorySectionProps {
 
 const LOCAL_STORAGE_KEY = 'huahua_brand_custom_photos_v1';
 const DELETED_STORY_KEY = 'huahua_deleted_story_ids_v1';
+const STORY_RECOVERY_KEY = 'huahua_brand_unsynced_recovery_v1';
+const DEFAULT_STORY_IDS = new Set(HUA_HUA_STORY.initialPhotos.map((p) => p.id));
+
+const getLocalDeletedStoryIds = (): string[] => {
+  try {
+    const raw = localStorage.getItem(DELETED_STORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+const addLocalDeletedStoryId = (id: string) => {
+  try {
+    const ids = getLocalDeletedStoryIds();
+    if (!ids.includes(id)) {
+      ids.push(id);
+      localStorage.setItem(DELETED_STORY_KEY, JSON.stringify(ids));
+    }
+  } catch (err) {
+    console.warn('Could not save deleted story id:', err);
+  }
+};
+
+const removeLocalDeletedStoryId = (id: string) => {
+  try {
+    const ids = getLocalDeletedStoryIds();
+    if (ids.includes(id)) {
+      localStorage.setItem(
+        DELETED_STORY_KEY,
+        JSON.stringify(ids.filter((x) => x !== id))
+      );
+    }
+  } catch (err) {
+    console.warn('Could not remove deleted story id:', err);
+  }
+};
 
 export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImageZoom }) => {
   const { isOwner, logout } = useStoreOwner();
@@ -34,11 +85,20 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
   const [authActionTitle, setAuthActionTitle] = useState('店主管理操作');
   const [showAllPhotos, setShowAllPhotos] = useState(false);
 
-  // Timeline photos state: merges curated photos + user uploaded photos
+  // Timeline photos state: merges curated photos + Firestore synced uploads
   const [customPhotos, setCustomPhotos] = useState<HuaHuaPhoto[]>([]);
-  const [deletedPhotoIds, setDeletedPhotoIds] = useState<string[]>([]);
+  const [deletedPhotoIds, setDeletedPhotoIds] = useState<string[]>(() => getLocalDeletedStoryIds());
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Cloud sync & recovery state
+  const [cloudError, setCloudError] = useState<CloudErrorState | null>(null);
+  const [cloudItemIds, setCloudItemIds] = useState<Set<string>>(() => new Set());
+  const [unsyncedLocalPhotos, setUnsyncedLocalPhotos] = useState<HuaHuaPhoto[]>(() =>
+    loadRecoveryQueue<HuaHuaPhoto>(STORY_RECOVERY_KEY)
+  );
+  const [isSyncingManual, setIsSyncingManual] = useState(false);
+  const [syncNoticeBanner, setSyncNoticeBanner] = useState<string | null>(null);
 
   // New photo form state
   const [newTitle, setNewTitle] = useState('');
@@ -47,8 +107,95 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
   const [newCaption, setNewCaption] = useState('');
   const [previewDataUrl, setPreviewDataUrl] = useState<string>('');
   const [formError, setFormError] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load custom photos and deleted IDs from localStorage
+  // In-app delete confirmation modal
+  const [deletingPhoto, setDeletingPhoto] = useState<HuaHuaPhoto | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const applyFirestoreSnapshotDocs = useCallback(
+    (docs: Array<{ id: string; data: () => Record<string, unknown> }>) => {
+      const deletedFromCloud = new Set<string>();
+      const remotePhotos: HuaHuaPhoto[] = [];
+
+      docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const resolvedId = (typeof data.id === 'string' && data.id) || docSnap.id;
+        if (data.deleted === true) {
+          deletedFromCloud.add(resolvedId);
+        } else if (resolvedId && typeof data.title === 'string' && typeof data.imageUrl === 'string') {
+          remotePhotos.push({
+            id: resolvedId,
+            title: data.title,
+            ageStage: typeof data.ageStage === 'string' && data.ageStage ? data.ageStage : '幸福日常',
+            dateStr: typeof data.dateStr === 'string' && data.dateStr ? data.dateStr : '近期拍攝',
+            imageUrl: data.imageUrl,
+            storyCaption:
+              typeof data.storyCaption === 'string' && data.storyCaption
+                ? data.storyCaption
+                : '花花在門店的可愛留影',
+            isCustomUpload: true
+          });
+        }
+      });
+
+      const mergedDeleted = new Set<string>([
+        ...Array.from(deletedFromCloud),
+        ...getLocalDeletedStoryIds()
+      ]);
+
+      const activeRemotes = remotePhotos.filter((r) => !mergedDeleted.has(r.id));
+      const cloudIdsSet = new Set(activeRemotes.map((r) => r.id));
+
+      // Rescue any old localStorage-only HuaHua photos so owner can sync them to Firestore
+      const strandedMap = new Map<string, HuaHuaPhoto>();
+      loadRecoveryQueue<HuaHuaPhoto>(STORY_RECOVERY_KEY).forEach((p) => {
+        if (p && p.id && !cloudIdsSet.has(p.id) && !mergedDeleted.has(p.id)) {
+          strandedMap.set(p.id, p);
+        }
+      });
+
+      try {
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((p) => {
+              if (
+                p &&
+                p.id &&
+                !DEFAULT_STORY_IDS.has(p.id) &&
+                !cloudIdsSet.has(p.id) &&
+                !mergedDeleted.has(p.id)
+              ) {
+                strandedMap.set(p.id, p as HuaHuaPhoto);
+              }
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      const strandedList = Array.from(strandedMap.values());
+      saveRecoveryQueue(STORY_RECOVERY_KEY, strandedList);
+
+      setCloudError(null);
+      setCloudItemIds(cloudIdsSet);
+      setUnsyncedLocalPhotos(strandedList);
+      setDeletedPhotoIds(Array.from(mergedDeleted));
+      setCustomPhotos(activeRemotes);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(activeRemotes));
+      } catch (err) {
+        console.warn('Could not persist story cache:', err);
+      }
+    },
+    []
+  );
+
+  // Load initial cache and subscribe to Firestore brandStoryPhotos
   useEffect(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -62,20 +209,23 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
       console.warn('Failed to parse saved custom Hua Hua photos', err);
     }
 
-    try {
-      const savedDeleted = localStorage.getItem(DELETED_STORY_KEY);
-      if (savedDeleted) {
-        const parsedDel = JSON.parse(savedDeleted);
-        if (Array.isArray(parsedDel)) {
-          setDeletedPhotoIds(parsedDel);
-        }
+    const unsubscribe = onSnapshot(
+      collection(db, 'brandStoryPhotos'),
+      (snapshot) => {
+        applyFirestoreSnapshotDocs(snapshot.docs);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'brandStoryPhotos');
+        setCloudError({
+          message: formatFirestoreActionError(error, '讀取雲端花花成長寫真'),
+          isQuota: isQuotaError(error)
+        });
       }
-    } catch (err) {
-      console.warn('Failed to parse deleted photo IDs', err);
-    }
-  }, []);
+    );
 
-  // Save to localStorage
+    return () => unsubscribe();
+  }, [applyFirestoreSnapshotDocs]);
+
   const saveCustomPhotos = (photos: HuaHuaPhoto[]) => {
     setCustomPhotos(photos);
     try {
@@ -90,6 +240,75 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
   );
   const displayedPhotos: HuaHuaPhoto[] = showAllPhotos ? allPhotos : allPhotos.slice(0, 3);
 
+  const handleManualCloudRefresh = async () => {
+    if (isSyncingManual) return;
+    setIsSyncingManual(true);
+    setSyncNoticeBanner(null);
+    try {
+      const serverSnap = await getDocsFromServer(collection(db, 'brandStoryPhotos'));
+      applyFirestoreSnapshotDocs(serverSnap.docs);
+      const activeCount = serverSnap.docs.filter((d) => d.data().deleted !== true).length;
+      setSyncNoticeBanner(
+        `已完成雲端寫真校對（雲端共 ${activeCount} 張自訂寫真），手機與電腦現為完全一致內容。`
+      );
+    } catch (err) {
+      handleFirestoreError(err, OperationType.GET, 'brandStoryPhotos');
+      setCloudError({
+        message: formatFirestoreActionError(err, '手動重整花花寫真雲端'),
+        isQuota: isQuotaError(err)
+      });
+    } finally {
+      setIsSyncingManual(false);
+    }
+  };
+
+  const syncStrandedStoryPhoto = async (localPhoto: HuaHuaPhoto): Promise<boolean> => {
+    const nowIso = new Date().toISOString();
+    const meta = {
+      id: localPhoto.id,
+      title: localPhoto.title,
+      ageStage: localPhoto.ageStage,
+      dateStr: localPhoto.dateStr,
+      storyCaption: localPhoto.storyCaption,
+      isCustomUpload: true,
+      deleted: false,
+      updatedAt: nowIso
+    };
+    try {
+      const fitted = await fitImagesWithinFirestoreLimit([localPhoto.imageUrl], meta, {
+        primaryField: 'imageUrl'
+      });
+      if (!fitted.ok) {
+        setCloudError({ message: fitted.reason, isQuota: false });
+        return false;
+      }
+
+      await setDoc(doc(db, 'brandStoryPhotos', localPhoto.id), {
+        ...meta,
+        imageUrl: fitted.images[0]
+      });
+
+      const syncedPhoto: HuaHuaPhoto = { ...localPhoto, imageUrl: fitted.images[0], isCustomUpload: true };
+      removeLocalDeletedStoryId(localPhoto.id);
+      setUnsyncedLocalPhotos((prev) => {
+        const next = prev.filter((p) => p.id !== localPhoto.id);
+        saveRecoveryQueue(STORY_RECOVERY_KEY, next);
+        return next;
+      });
+      setCloudItemIds((prev) => new Set(prev).add(localPhoto.id));
+      setCloudError(null);
+      saveCustomPhotos([...customPhotos.filter((p) => p.id !== syncedPhoto.id), syncedPhoto]);
+      return true;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `brandStoryPhotos/${localPhoto.id}`);
+      setCloudError({
+        message: formatFirestoreActionError(err, `補傳「${localPhoto.title}」至雲端`),
+        isQuota: isQuotaError(err)
+      });
+      return false;
+    }
+  };
+
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -102,7 +321,7 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
 
     try {
       setFormError('');
-      const compressed = await compressImage(file, 960, 0.74);
+      const compressed = await compressImage(file, 840, 0.7);
       setPreviewDataUrl(compressed);
     } catch {
       setFormError('圖片壓縮處理失敗，請換一張再試');
@@ -111,8 +330,9 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
     }
   };
 
-  const handleAddPhotoSubmit = (e: React.FormEvent) => {
+  const handleAddPhotoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!previewDataUrl) {
       setFormError('請先選擇並預覽要上傳的花花照片');
       return;
@@ -122,8 +342,13 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
       return;
     }
 
-    const newPhotoItem: HuaHuaPhoto = {
-      id: `hh-custom-${Date.now()}`,
+    setIsSubmitting(true);
+    setFormError('');
+
+    const targetId = `hh-custom-${Date.now()}`;
+    const nowIso = new Date().toISOString();
+    const draftItem: HuaHuaPhoto = {
+      id: targetId,
       title: newTitle.trim(),
       ageStage: newAgeStage.trim() || '幸福日常',
       dateStr: newDateStr || '近期拍攝',
@@ -132,36 +357,103 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
       isCustomUpload: true
     };
 
-    const updated = [...customPhotos, newPhotoItem];
-    saveCustomPhotos(updated);
+    const meta = {
+      id: targetId,
+      title: draftItem.title,
+      ageStage: draftItem.ageStage,
+      dateStr: draftItem.dateStr,
+      storyCaption: draftItem.storyCaption,
+      isCustomUpload: true,
+      deleted: false,
+      updatedAt: nowIso
+    };
 
-    // Reset form
-    setNewTitle('');
-    setNewAgeStage('');
-    setNewCaption('');
-    setPreviewDataUrl('');
-    setFormError('');
-    setIsUploadModalOpen(false);
+    try {
+      const fitted = await fitImagesWithinFirestoreLimit([previewDataUrl], meta, {
+        primaryField: 'imageUrl'
+      });
+      if (!fitted.ok) {
+        setFormError(fitted.reason);
+        setIsSubmitting(false);
+        return;
+      }
+
+      await setDoc(doc(db, 'brandStoryPhotos', targetId), {
+        ...meta,
+        imageUrl: fitted.images[0]
+      });
+
+      const syncedItem: HuaHuaPhoto = { ...draftItem, imageUrl: fitted.images[0] };
+      removeLocalDeletedStoryId(targetId);
+      saveCustomPhotos([...customPhotos, syncedItem]);
+      setCloudItemIds((prev) => new Set(prev).add(targetId));
+      setCloudError(null);
+      setSyncNoticeBanner(
+        `「${syncedItem.title}」已上傳並寫入雲端資料庫，手機、電腦、平板現在皆會顯示！`
+      );
+
+      setNewTitle('');
+      setNewAgeStage('');
+      setNewCaption('');
+      setPreviewDataUrl('');
+      setFormError('');
+      setIsUploadModalOpen(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `brandStoryPhotos/${targetId}`);
+      const msg = formatFirestoreActionError(err, '上傳花花寫真至雲端');
+      setFormError(msg);
+      if (isQuotaError(err)) {
+        setCloudError({ message: msg, isQuota: true });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDeletePhoto = (photo: HuaHuaPhoto) => {
+  const handleRequestDeletePhoto = (photo: HuaHuaPhoto) => {
     if (!isOwner) {
       setAuthActionTitle('刪除花花照片卡片');
       setIsAuthModalOpen(true);
       return;
     }
-    if (window.confirm(`確定要刪除「${photo.title}」這張照片卡片嗎？`)) {
-      if (photo.isCustomUpload) {
-        const updated = customPhotos.filter((p) => p.id !== photo.id);
-        saveCustomPhotos(updated);
+    setDeleteError(null);
+    setDeletingPhoto(photo);
+  };
+
+  const handleConfirmDeletePhoto = async () => {
+    if (!deletingPhoto || isDeleting) return;
+    const targetPhoto = deletingPhoto;
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await setDoc(doc(db, 'brandStoryPhotos', targetPhoto.id), {
+        id: targetPhoto.id,
+        deleted: true,
+        updatedAt: new Date().toISOString()
+      });
+
+      addLocalDeletedStoryId(targetPhoto.id);
+      if (targetPhoto.isCustomUpload) {
+        saveCustomPhotos(customPhotos.filter((p) => p.id !== targetPhoto.id));
       }
-      const newDeleted = [...deletedPhotoIds, photo.id];
-      setDeletedPhotoIds(newDeleted);
-      try {
-        localStorage.setItem(DELETED_STORY_KEY, JSON.stringify(newDeleted));
-      } catch (err) {
-        console.warn(err);
+      setDeletedPhotoIds((prev) => (prev.includes(targetPhoto.id) ? prev : [...prev, targetPhoto.id]));
+      setCloudItemIds((prev) => {
+        const next = new Set(prev);
+        next.delete(targetPhoto.id);
+        return next;
+      });
+      setDeletingPhoto(null);
+      setSyncNoticeBanner(`已從雲端移除「${targetPhoto.title}」，所有裝置已同步更新。`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `brandStoryPhotos/${targetPhoto.id}`);
+      const msg = formatFirestoreActionError(err, '雲端刪除花花寫真');
+      setDeleteError(msg);
+      if (isQuotaError(err)) {
+        setCloudError({ message: msg, isQuota: true });
       }
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -395,7 +687,16 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
             </p>
 
             {isOwner && (
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleManualCloudRefresh}
+                  disabled={isSyncingManual}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-stone-700 bg-white hover:bg-stone-100 border border-stone-300 rounded-xl shadow-2xs transition-colors disabled:opacity-60"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingManual ? 'animate-spin' : ''}`} />
+                  <span>同步檢查 ({cloudItemIds.size} 筆雲端)</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setIsUploadModalOpen(true)}
@@ -415,6 +716,42 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
               </div>
             )}
           </div>
+
+          {isOwner && (
+            <CloudSyncStatusBar
+              sectionLabel="花花成長寫真"
+              cloudError={cloudError}
+              onDismissError={() => setCloudError(null)}
+              onRetrySync={handleManualCloudRefresh}
+              syncNoticeBanner={syncNoticeBanner}
+              onDismissNotice={() => setSyncNoticeBanner(null)}
+              recoveryItems={unsyncedLocalPhotos.map((p) => ({
+                id: p.id,
+                title: p.title,
+                subtitle: `${p.ageStage} · ${p.dateStr}`,
+                thumbnailUrl: p.imageUrl
+              }))}
+              isSyncing={isSyncingManual}
+              onSyncRecoveryItem={async (id) => {
+                const target = unsyncedLocalPhotos.find((p) => p.id === id);
+                if (!target || isSyncingManual) return;
+                setIsSyncingManual(true);
+                const ok = await syncStrandedStoryPhoto(target);
+                if (ok) {
+                  setSyncNoticeBanner(`已將「${target.title}」壓縮並補傳至雲端，手機現在也可以看到了！`);
+                }
+                setIsSyncingManual(false);
+              }}
+              onDiscardRecoveryItem={(id) => {
+                setUnsyncedLocalPhotos((prev) => {
+                  const next = prev.filter((p) => p.id !== id);
+                  saveRecoveryQueue(STORY_RECOVERY_KEY, next);
+                  return next;
+                });
+                setSyncNoticeBanner('已移除該筆僅存於本機的未同步成長照暫存。');
+              }}
+            />
+          )}
 
           {/* Timeline Grid (Max 12 initially) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
@@ -459,7 +796,7 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDeletePhoto(photo);
+                        handleRequestDeletePhoto(photo);
                       }}
                       className="absolute bottom-2.5 right-2.5 p-1.5 bg-red-600/90 text-white rounded-md hover:bg-red-700 transition-colors shadow-xs z-10 flex items-center gap-1 text-[10px]"
                       title="刪除此張寫真照片卡片"
@@ -524,10 +861,9 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
-          onClick={() => setIsUploadModalOpen(false)}
         >
           <div
-            className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-stone-200 relative animate-fadeIn"
+            className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-stone-200 relative animate-fadeIn overflow-y-auto max-h-[90vh]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-stone-100 pb-3">
@@ -535,12 +871,18 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
                 <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-900 flex items-center justify-center">
                   <Camera className="w-4 h-4" />
                 </div>
-                <h4 className="font-serif-title font-bold text-stone-900 text-base">
-                  上傳花花新照片 / 成長寫真
-                </h4>
+                <div>
+                  <h4 className="font-serif-title font-bold text-stone-900 text-base">
+                    上傳花花新照片 / 成長寫真
+                  </h4>
+                  <p className="text-[11px] text-stone-500">
+                    點擊視窗外不會誤關 · 成功寫入雲端後所有裝置皆可看見
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setIsUploadModalOpen(false)}
                 className="text-stone-400 hover:text-stone-600 p-1 text-sm font-bold"
               >
@@ -632,27 +974,115 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
               </div>
 
               {formError && (
-                <div className="p-2 bg-red-50 text-red-700 rounded-lg text-xs">
-                  {formError}
+                <div className="p-2.5 bg-red-50 text-red-700 rounded-lg text-xs border border-red-200 flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{formError}</span>
                 </div>
               )}
 
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 px-4 bg-amber-900 hover:bg-amber-800 text-white font-semibold rounded-xl transition-colors shadow-xs"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2.5 px-4 bg-amber-900 hover:bg-amber-800 text-white font-semibold rounded-xl transition-colors shadow-xs disabled:opacity-60"
                 >
-                  儲存並加入成長相冊
+                  {isSubmitting ? '正在寫入雲端資料庫...' : '確認上傳並同步至雲端'}
                 </button>
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setIsUploadModalOpen(false)}
-                  className="py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold rounded-xl transition-colors"
+                  className="py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold rounded-xl transition-colors disabled:opacity-50"
                 >
                   取消
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Delete Confirmation Modal */}
+      {deletingPhoto && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn"
+        >
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-stone-200">
+            <div className="flex items-start justify-between gap-3 border-b border-stone-200 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-serif-title font-bold text-stone-900 text-base">
+                    確定要刪除此張花花照片卡片？
+                  </h4>
+                  <p className="text-[11px] text-stone-500">
+                    刪除後將同步從手機、電腦、平板所有裝置移除
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => {
+                  setDeletingPhoto(null);
+                  setDeleteError(null);
+                }}
+                className="p-1 text-stone-400 hover:text-stone-600 rounded-lg"
+                title="關閉視窗"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-stone-50 border border-stone-200">
+              <img
+                src={deletingPhoto.imageUrl}
+                alt={deletingPhoto.title}
+                className="w-16 h-16 rounded-xl object-cover border border-stone-200 shrink-0"
+              />
+              <div className="min-w-0">
+                <div className="font-bold text-stone-900 text-xs truncate">
+                  {deletingPhoto.title}
+                </div>
+                <div className="text-[11px] text-stone-500 mt-0.5">
+                  {deletingPhoto.ageStage} · {deletingPhoto.dateStr}
+                </div>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div className="p-2.5 bg-red-50 text-red-700 rounded-xl text-xs flex items-center gap-1.5 border border-red-200">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => {
+                  setDeletingPhoto(null);
+                  setDeleteError(null);
+                }}
+                className="px-4 py-2.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-xl transition-colors"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDeletePhoto}
+                className="px-5 py-2.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-60"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeleting ? '雲端刪除同步中...' : '確認刪除照片'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

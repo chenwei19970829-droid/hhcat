@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { STORE_INFO } from '../data/catVillaData';
+import { STORE_INFO, ShowcasePhoto } from '../data/catVillaData';
 import { MultiPhotoLightbox } from './MultiPhotoLightbox';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
 import { useStoreOwner } from '../utils/adminAuth';
 import { StoreOwnerAuthModal } from './StoreOwnerAuthModal';
+import {
+  ShowcaseSizeCategory,
+  focusShowcaseSizeCategory,
+  inferShowcaseSizeCategory,
+  publishTransferredShowcasePhoto
+} from '../utils/showcaseSync';
 import {
   PackageCheck,
   Plus,
@@ -20,7 +26,9 @@ import {
   Truck,
   MapPin,
   X,
-  Images
+  Images,
+  ArrowRightLeft,
+  ArrowRight
 } from 'lucide-react';
 
 export interface InStockItem {
@@ -119,6 +127,22 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
   const [formImages, setFormImages] = useState<string[]>([]);
   const [formError, setFormError] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Transfer Sold In-Stock Item -> Showcase Gallery Modal State
+  const [transferringItem, setTransferringItem] = useState<InStockItem | null>(null);
+  const [transferTitle, setTransferTitle] = useState('');
+  const [transferSizeCategory, setTransferSizeCategory] = useState<ShowcaseSizeCategory>('120');
+  const [transferDimensions, setTransferDimensions] = useState('');
+  const [transferCustomerNote, setTransferCustomerNote] = useState('');
+  const [transferTags, setTransferTags] = useState('');
+  const [removeFromInStock, setRemoveFromInStock] = useState(true);
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [transferError, setTransferError] = useState('');
+  const [transferSuccessBanner, setTransferSuccessBanner] = useState<{
+    title: string;
+    sizeCategory: ShowcaseSizeCategory;
+    removedFromStock: boolean;
+  } | null>(null);
 
   const multiFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -304,6 +328,129 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
     }
   };
 
+  const handleOpenTransferModal = (item: InStockItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isOwner) {
+      setAuthActionTitle('現貨已售出轉移至客製實品相冊');
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    const inferredSize = inferShowcaseSizeCategory(item.sizeTag, item.title);
+    const cleanedBaseTitle = item.title
+      .replace(/^(台中豐原門店現貨|門市現貨展示|熱門現貨|門市實品)\s*[·・:-]*\s*/u, '')
+      .trim();
+
+    setTransferringItem(item);
+    setTransferTitle(`豐原門店完工實拍 · ${cleanedBaseTitle || item.title}`);
+    setTransferSizeCategory(inferredSize);
+    setTransferDimensions(item.sizeTag || '依標記尺寸');
+    setTransferCustomerNote(
+      item.description || '門市已售出完工實品，純松木足 1.5cm 無甲醛打造，支援同款 1:1 客製。'
+    );
+    const mergedTags = Array.from(new Set(['已售出實品', ...(item.features || [])])).slice(0, 6);
+    setTransferTags(mergedTags.join(', '));
+    setRemoveFromInStock(true);
+    setTransferError('');
+  };
+
+  const handleConfirmTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transferringItem) return;
+
+    const itemImages = getItemImages(transferringItem);
+    if (itemImages.length === 0) {
+      setTransferError('此現貨卡片缺少圖片，無法轉移至相冊');
+      return;
+    }
+    if (!transferTitle.trim()) {
+      setTransferError('請填寫轉入客製實品相冊後的作品標題');
+      return;
+    }
+
+    setIsTransferring(true);
+    setTransferError('');
+
+    const showcaseId = `showcase-from-${transferringItem.id}-${Date.now()}`;
+    const parsedTags = transferTags
+      .split(/[,，\n]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const newShowcasePhoto: ShowcasePhoto = {
+      id: showcaseId,
+      title: transferTitle.trim(),
+      sizeCategory: transferSizeCategory,
+      dimensionsText: transferDimensions.trim() || transferringItem.sizeTag || `${transferSizeCategory}cm 系列`,
+      imageUrl: itemImages[0],
+      images: itemImages,
+      customerNote:
+        transferCustomerNote.trim() ||
+        '豐原門市已售出完工實品照，純實木厚度 1.5cm，支援同款專屬客製。',
+      date: '門店售出實品',
+      tags: parsedTags.length > 0 ? parsedTags : ['已售出實品', '客製實木'],
+      isCustomUpload: true
+    };
+
+    try {
+      await setDoc(doc(db, 'showcasePhotos', showcaseId), {
+        id: showcaseId,
+        title: newShowcasePhoto.title,
+        sizeCategory: newShowcasePhoto.sizeCategory,
+        dimensions: newShowcasePhoto.dimensionsText,
+        description: newShowcasePhoto.customerNote,
+        imageUrl: newShowcasePhoto.imageUrl,
+        images: newShowcasePhoto.images || [],
+        tags: newShowcasePhoto.tags,
+        date: newShowcasePhoto.date,
+        isCustomUpload: true,
+        deleted: false,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `showcasePhotos/${showcaseId}`);
+    }
+
+    // Instantly update ShowcaseGallery UI & localStorage cache
+    publishTransferredShowcasePhoto(newShowcasePhoto);
+
+    // Optionally remove sold card from InStockSection (default true)
+    if (removeFromInStock) {
+      try {
+        const deletedJson = localStorage.getItem(DELETED_KEY);
+        const deletedIds: string[] = deletedJson ? JSON.parse(deletedJson) : [];
+        if (!deletedIds.includes(transferringItem.id)) {
+          deletedIds.push(transferringItem.id);
+          localStorage.setItem(DELETED_KEY, JSON.stringify(deletedIds));
+        }
+      } catch (err) {
+        console.warn(err);
+      }
+
+      const remainingStock = items.filter((it) => it.id !== transferringItem.id);
+      saveItems(remainingStock);
+
+      try {
+        await setDoc(doc(db, 'inStockItems', transferringItem.id), {
+          id: transferringItem.id,
+          deleted: true,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `inStockItems/${transferringItem.id}`);
+      }
+    }
+
+    setTransferSuccessBanner({
+      title: newShowcasePhoto.title,
+      sizeCategory: transferSizeCategory,
+      removedFromStock: removeFromInStock
+    });
+
+    setIsTransferring(false);
+    setTransferringItem(null);
+  };
+
   const handleMultipleImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -439,7 +586,7 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
         </div>
 
         {/* Important In-Stock Shipping & Self-Pickup Disclaimer Banner */}
-        <div className="mb-10 p-4 sm:p-5 bg-amber-100/80 border-2 border-amber-300 rounded-2xl flex items-start gap-3.5 text-stone-800 shadow-xs">
+        <div className="mb-8 p-4 sm:p-5 bg-amber-100/80 border-2 border-amber-300 rounded-2xl flex items-start gap-3.5 text-stone-800 shadow-xs">
           <div className="p-2 bg-amber-500/20 text-amber-900 rounded-xl shrink-0 mt-0.5">
             <Truck className="w-5 h-5 text-amber-900" />
           </div>
@@ -453,6 +600,47 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
             </p>
           </div>
         </div>
+
+        {/* Owner Transfer Success Notification Banner */}
+        {isOwner && transferSuccessBanner && (
+          <div className="mb-8 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm text-emerald-950 shadow-xs">
+            <div className="flex items-start gap-2.5">
+              <CheckCircle className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-bold">
+                  已將「{transferSuccessBanner.title}」轉移至「客製實品相冊 ·{' '}
+                  {transferSuccessBanner.sizeCategory === 'custom'
+                    ? '客製化尺寸'
+                    : `${transferSuccessBanner.sizeCategory}cm 系列`}
+                  」！
+                </div>
+                <div className="text-xs text-emerald-800 mt-0.5">
+                  {transferSuccessBanner.removedFromStock
+                    ? '已同步從門市現貨區下架（標記售出），實拍多圖已保留於相冊中供客人參考訂製。'
+                    : '已複製一份至客製實品相冊，門市現貨卡片仍繼續保留顯示。'}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => focusShowcaseSizeCategory(transferSuccessBanner.sizeCategory)}
+                className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold transition-colors whitespace-nowrap"
+              >
+                <span>前往客製實品相冊查看</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setTransferSuccessBanner(null)}
+                className="p-1.5 text-emerald-700 hover:bg-emerald-100 rounded-lg"
+                title="關閉提示"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* In-Stock Items Grid */}
         {items.length === 0 ? (
@@ -539,30 +727,6 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
                         </span>
                       </div>
                     )}
-
-                    {/* Owner Edit & Delete Buttons */}
-                    {isOwner && (
-                      <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={(e) => handleOpenEditModal(item, e)}
-                          className="px-2.5 py-1 bg-amber-900/95 hover:bg-amber-900 text-white text-[11px] font-semibold rounded-lg shadow-md transition-colors flex items-center gap-1"
-                          title="編輯與新增多張照片"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                          <span>編輯/加圖</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteItem(item, e)}
-                          className="px-2.5 py-1 bg-red-600/95 hover:bg-red-700 text-white text-[11px] font-semibold rounded-lg shadow-md transition-colors flex items-center gap-1"
-                          title="現貨賣出後刪除此卡片"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>刪除</span>
-                        </button>
-                      </div>
-                    )}
                   </div>
 
                   {/* Card Content */}
@@ -607,6 +771,42 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
                         <span className="text-stone-400 font-mono">現貨僅 1 台</span>
                       </div>
 
+                      {/* Owner Controls Row (Shown strictly to authenticated owner) */}
+                      {isOwner && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-2 rounded-xl bg-stone-50 border border-stone-200/90 flex flex-wrap items-center gap-1.5"
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenTransferModal(item, e)}
+                            className="flex-1 min-w-[140px] px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-semibold rounded-lg shadow-2xs transition-colors flex items-center justify-center gap-1 whitespace-nowrap"
+                            title="現貨已售出，直接轉移到客製實品相冊依尺寸展示"
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5 shrink-0" />
+                            <span>已售出→轉實品相冊</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenEditModal(item, e)}
+                            className="px-2.5 py-1.5 bg-amber-900 hover:bg-amber-800 text-white text-[11px] font-semibold rounded-lg shadow-2xs transition-colors flex items-center gap-1 whitespace-nowrap"
+                            title="編輯與新增多張照片"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>編輯</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteItem(item, e)}
+                            className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-[11px] font-semibold rounded-lg shadow-2xs transition-colors flex items-center gap-1 whitespace-nowrap"
+                            title="直接刪除現貨卡片"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>刪除</span>
+                          </button>
+                        </div>
+                      )}
+
                       <button
                         type="button"
                         onClick={(e) => {
@@ -633,12 +833,8 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn"
-          onClick={() => setIsUploadModalOpen(false)}
         >
-          <div
-            className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-stone-200 overflow-y-auto max-h-[90vh]"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-stone-200 overflow-y-auto max-h-[90vh]">
             <div className="flex items-center justify-between border-b border-stone-200 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-900 flex items-center justify-center">
@@ -818,6 +1014,211 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
                   className="py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold rounded-xl transition-colors"
                 >
                   取消
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer Sold In-Stock Item -> Showcase Gallery Modal */}
+      {transferringItem && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn"
+        >
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-stone-200 overflow-y-auto max-h-[92vh]">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                  <ArrowRightLeft className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-serif-title font-bold text-stone-900 text-base">
+                    現貨已售出 · 轉移至「客製實品相冊」
+                  </h4>
+                  <p className="text-[11px] text-stone-500">
+                    將保留所有實拍多角度照片，依尺寸分類納入客製實品相冊展示
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTransferringItem(null)}
+                className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100"
+                title="關閉視窗"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmTransfer} className="space-y-4 text-xs">
+              {transferError && (
+                <div className="p-2.5 bg-red-50 text-red-700 rounded-lg text-xs flex items-center gap-1.5 border border-red-200">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{transferError}</span>
+                </div>
+              )}
+
+              {/* Photo strip preview */}
+              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-stone-700">
+                    將一併轉移以下實拍照片
+                  </span>
+                  <span className="text-amber-900 font-semibold font-mono">
+                    共 {getItemImages(transferringItem).length} 張
+                  </span>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {getItemImages(transferringItem).map((imgUrl, idx) => (
+                    <div
+                      key={idx}
+                      className="relative w-16 h-16 rounded-lg overflow-hidden border border-stone-300 shrink-0 bg-white"
+                    >
+                      <img
+                        src={imgUrl}
+                        alt={`實拍 ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      {idx === 0 && (
+                        <span className="absolute bottom-0 inset-x-0 bg-amber-900 text-white text-[9px] text-center font-bold py-0.5">
+                          主圖
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Target Size Category in ShowcaseGallery */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-bold text-stone-800">
+                    歸類至「客製實品相冊」尺寸分類 *
+                  </label>
+                  <span className="text-[11px] text-emerald-700 font-medium">
+                    已依現貨規格自動判斷
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                  {(['60', '90', '120', '150', '180'] as const).map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setTransferSizeCategory(size)}
+                      className={`py-2 text-xs font-medium rounded-lg border transition-all ${
+                        transferSizeCategory === size
+                          ? 'bg-amber-900 text-white border-amber-900 font-semibold shadow-xs'
+                          : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                      }`}
+                    >
+                      {size}cm
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setTransferSizeCategory('custom')}
+                    className={`py-2 text-xs font-medium rounded-lg border transition-all ${
+                      transferSizeCategory === 'custom'
+                        ? 'bg-amber-900 text-white border-amber-900 font-semibold shadow-xs'
+                        : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                    }`}
+                  >
+                    客製化尺寸
+                  </button>
+                </div>
+              </div>
+
+              {/* Showcase Title & Dimensions */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="sm:col-span-2">
+                  <label className="block font-semibold text-stone-700 mb-1">
+                    相冊展示標題 *
+                  </label>
+                  <input
+                    type="text"
+                    value={transferTitle}
+                    onChange={(e) => setTransferTitle(e.target.value)}
+                    placeholder="例如：豐原門店完工實拍 · 180-60-90 雙層旗艦款"
+                    required
+                    className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-stone-700 mb-1">
+                    尺寸標記
+                  </label>
+                  <input
+                    type="text"
+                    value={transferDimensions}
+                    onChange={(e) => setTransferDimensions(e.target.value)}
+                    placeholder="180-60-90 cm"
+                    className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Showcase Note */}
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">
+                  相冊作品說明／客人反饋
+                </label>
+                <textarea
+                  rows={2}
+                  value={transferCustomerNote}
+                  onChange={(e) => setTransferCustomerNote(e.target.value)}
+                  className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2 text-xs"
+                />
+              </div>
+
+              {/* Tags */}
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">
+                  標籤（以逗號分隔）
+                </label>
+                <input
+                  type="text"
+                  value={transferTags}
+                  onChange={(e) => setTransferTags(e.target.value)}
+                  className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2 text-xs"
+                />
+              </div>
+
+              {/* Remove sold item from In-Stock checkbox */}
+              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50/80 border border-amber-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={removeFromInStock}
+                  onChange={(e) => setRemoveFromInStock(e.target.checked)}
+                  className="mt-0.5 rounded border-stone-300 text-amber-900 focus:ring-amber-800"
+                />
+                <span className="text-xs text-stone-800 leading-relaxed">
+                  <strong className="text-amber-950 block">
+                    轉入相冊後，同時從「門市現貨區」移除下架
+                  </strong>
+                  <span className="text-[11px] text-stone-600">
+                    勾選代表此台現貨已賣出帶走；若店內還有第二台相同現貨，可取消勾選僅複製展示到相冊。
+                  </span>
+                </span>
+              </label>
+
+              <div className="pt-3 border-t border-stone-200 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setTransferringItem(null)}
+                  className="px-4 py-2.5 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={isTransferring}
+                  className="px-5 py-2.5 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-60"
+                >
+                  <ArrowRightLeft className="w-4 h-4" />
+                  <span>{isTransferring ? '轉移同步中...' : '確認轉移至客製實品相冊'}</span>
                 </button>
               </div>
             </form>

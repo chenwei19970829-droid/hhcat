@@ -64,7 +64,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
     const canonical = document.querySelector('link[rel="canonical"]');
     if (canonical) {
-      canonical.setAttribute('href', `https://hhcat.cc/villa/${model.id}`);
+      canonical.setAttribute('href', `https://hhcat.cc/villa/${encodeURIComponent(model.id)}`);
     }
 
     trackEvent('view_product_page', {
@@ -495,7 +495,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
               onClick={() => onNavigateHome('#models')}
               className="text-xs font-semibold text-amber-900 hover:underline"
             >
-              看全部 18 款 →
+              看全部 {allModels.length || FEATURED_MODELS.length} 款 →
             </button>
           </div>
 
@@ -503,7 +503,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
             {relatedModels.map((rel) => (
               <div
                 key={rel.id}
-                onClick={() => onNavigateToPath(`/villa/${rel.id}`)}
+                onClick={() => onNavigateToPath(`/villa/${encodeURIComponent(rel.id)}`)}
                 className="bg-white rounded-2xl border border-stone-200 overflow-hidden hover:shadow-md hover:border-amber-800/40 transition-all cursor-pointer flex flex-col"
               >
                 <div className="aspect-4/3 bg-[#F6F2EC] p-2 border-b border-stone-100">

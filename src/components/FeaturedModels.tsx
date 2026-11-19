@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FEATURED_MODELS, VillaModel, STORE_INFO } from '../data/catVillaData';
+import { FEATURED_MODELS, VillaModel } from '../data/catVillaData';
 import { MultiPhotoLightbox } from './MultiPhotoLightbox';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
 import { useStoreOwner } from '../utils/adminAuth';
 import { StoreOwnerAuthModal } from './StoreOwnerAuthModal';
+import {
+  VILLA_DELETED_KEY,
+  loadCachedVillaModels,
+  lookupMenuPricing,
+  notifyVillaModelsUpdated,
+  sortVillaModels
+} from '../utils/villaModels';
 import {
   Maximize2,
   Calculator,
@@ -16,21 +23,24 @@ import {
   Upload,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  GripVertical,
+  Sparkles,
   X,
   AlertCircle,
   Images
 } from 'lucide-react';
 
 interface FeaturedModelsProps {
+  externalModels?: VillaModel[];
   onSelectForQuote: (model: VillaModel) => void;
   onOpenImageZoom: (imageTitle: string, imageUrl: string, subtitle?: string) => void;
   onOpenModelPage?: (model: VillaModel) => void;
 }
 
-const STORAGE_KEY = 'hhcat_featured_custom_models_v2';
-const DELETED_MODELS_KEY = 'hhcat_deleted_models_ids_v1';
-
 export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
+  externalModels,
   onSelectForQuote,
   onOpenModelPage
 }) => {
@@ -38,7 +48,9 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
   const [filter, setFilter] = useState<'all' | '90' | '120' | '150' | '180'>('all');
   const [showAllCards, setShowAllCards] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [models, setModels] = useState<VillaModel[]>([]);
+  const [models, setModels] = useState<VillaModel[]>(() =>
+    externalModels && externalModels.length > 0 ? externalModels : loadCachedVillaModels()
+  );
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authActionTitle, setAuthActionTitle] = useState('店主管理操作');
 
@@ -53,14 +65,22 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
   const [formHeight, setFormHeight] = useState(120);
   const [formDepth, setFormDepth] = useState(60);
   const [formLength, setFormLength] = useState(90);
-  const [formPrice, setFormPrice] = useState(7500);
-  const [formInstallFee, setFormInstallFee] = useState(1500);
+  const [formPrice, setFormPrice] = useState(8500);
+  const [formInstallFee, setFormInstallFee] = useState(3000);
+  const [pricingAutoNote, setPricingAutoNote] = useState<string | null>(null);
   const [formRecommendedCats, setFormRecommendedCats] = useState('1-2 隻貓咪');
   const [formImage, setFormImage] = useState<string | null>(null);
   const [formImages, setFormImages] = useState<string[]>([]);
   const [formHighlights, setFormHighlights] = useState<string[]>([]);
   const [newHighlightInput, setNewHighlightInput] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Drag & Drop States (Desktop photo drop & highlight tag reordering)
+  const [isDraggingImages, setIsDraggingImages] = useState(false);
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
+  const imageDragDepthRef = useRef(0);
+  const [draggedTagIndex, setDraggedTagIndex] = useState<number | null>(null);
+  const [dragOverTagIndex, setDragOverTagIndex] = useState<number | null>(null);
 
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
@@ -76,94 +96,30 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load models & subscribe to Firestore
   useEffect(() => {
-    try {
-      const deletedJson = localStorage.getItem(DELETED_MODELS_KEY);
-      const deletedIds: string[] = deletedJson ? JSON.parse(deletedJson) : [];
-
-      const saved = localStorage.getItem(STORAGE_KEY);
-      let combined: VillaModel[] = FEATURED_MODELS;
-      if (saved) {
-        const parsed: VillaModel[] = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const customOrUpdated = parsed.filter((m) => m && m.id);
-          const remainingInitial = FEATURED_MODELS.filter(
-            (m) => !customOrUpdated.some((c) => c.id === m.id)
-          );
-          combined = [...customOrUpdated, ...remainingInitial];
-        }
-      }
-      setModels(combined.filter((m) => !deletedIds.includes(m.id)));
-    } catch (e) {
-      console.warn('Error reading models from storage:', e);
-      setModels(FEATURED_MODELS);
+    if (externalModels) {
+      setModels(sortVillaModels(externalModels));
     }
+  }, [externalModels]);
 
-    const unsubscribe = onSnapshot(
-      collection(db, 'featuredModels'),
-      (snapshot) => {
-        if (!snapshot.empty) {
-          const deletedFromCloud = new Set<string>();
-          const remoteModels: VillaModel[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            if (data.deleted === true) {
-              deletedFromCloud.add(data.id || docSnap.id);
-            } else if (data.fullModelData) {
-              try {
-                remoteModels.push(JSON.parse(data.fullModelData));
-              } catch (e) {
-                console.warn(e);
-              }
-            } else if (data.id && data.name && data.image) {
-              remoteModels.push({
-                id: data.id,
-                name: data.name,
-                subtitle: data.subtitle || '純實木無甲醛 · 高透耐磨安全壓克力門',
-                heightGroup: data.heightGroup || '120',
-                heightGroupLabel: `高${data.heightGroup || '120'}cm`,
-                badge: data.badge || '',
-                price: Number(data.price) || 8500,
-                installFee: Number(data.installFee) || 1500,
-                dimensions: {
-                  height: Number(data.height) || 120,
-                  depth: Number(data.depth) || 60,
-                  length: Number(data.length) || 90,
-                  dimensionCode: `${data.height || 120}-${data.depth || 60}-${data.length || 90}`
-                },
-                image: data.image,
-                images: Array.isArray(data.images) && data.images.length > 0 ? data.images : [data.image],
-                highlights: Array.isArray(data.highlights) ? data.highlights : ['天然松木', '安全壓克力'],
-                includedAccessories: Array.isArray(data.highlights) ? data.highlights : ['天然松木', '安全壓克力'],
-                recommendedCats: data.recommendedCats || '1-2 隻貓咪',
-                suitableSpace: data.suitableSpace || '居家室內、客廳或陽台',
-                description: data.subtitle || '花花招財貓實木客製貓別墅'
-              });
-            }
-          });
-
-          let deletedIds: string[] = [];
-          try {
-            const deletedJson = localStorage.getItem(DELETED_MODELS_KEY);
-            deletedIds = deletedJson ? JSON.parse(deletedJson) : [];
-          } catch {}
-          setModels(() => {
-            const remainingDefaults = FEATURED_MODELS.filter(
-              (orig) => !remoteModels.some((r) => r.id === orig.id) && !deletedFromCloud.has(orig.id)
-            );
-            const activeRemotes = remoteModels.filter((r) => !deletedFromCloud.has(r.id));
-            return [...activeRemotes, ...remainingDefaults].filter((m) => !deletedIds.includes(m.id));
-          });
-        }
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.GET, 'featuredModels');
-      }
-    );
-
-    return () => unsubscribe();
-  }, []);
+  const applyMenuPricingForDimensions = (
+    nextH: number,
+    nextD: number,
+    nextL: number,
+    updateGroup = true
+  ) => {
+    const matched = lookupMenuPricing(nextH, nextD, nextL);
+    if (!matched) {
+      setPricingAutoNote(null);
+      return;
+    }
+    if (updateGroup) {
+      setFormHeightGroup(matched.heightGroup);
+    }
+    setFormPrice(matched.price);
+    setFormInstallFee(matched.installFee);
+    setPricingAutoNote(matched.note);
+  };
 
   const handleOpenAddModal = () => {
     if (!isOwner) {
@@ -179,13 +135,18 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     setFormHeight(120);
     setFormDepth(60);
     setFormLength(90);
-    setFormPrice(7500);
-    setFormInstallFee(1500);
+    const defaultPricing = lookupMenuPricing(120, 60, 90);
+    setFormPrice(defaultPricing ? defaultPricing.price : 8500);
+    setFormInstallFee(defaultPricing ? defaultPricing.installFee : 3000);
+    setPricingAutoNote(defaultPricing ? defaultPricing.note : null);
     setFormRecommendedCats('1-2 隻貓咪');
     setFormImage(null);
     setFormImages([]);
     setFormHighlights(['天然松木無甲醛', '靜音萬向輪', '高透壓克力門', '側邊格柵通風']);
+    setNewHighlightInput('');
     setFormError(null);
+    setIsDraggingImages(false);
+    imageDragDepthRef.current = 0;
     setIsFormModalOpen(true);
   };
 
@@ -206,6 +167,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     setFormLength(model.dimensions.length);
     setFormPrice(model.price);
     setFormInstallFee(model.installFee);
+    setPricingAutoNote('編輯尺寸規格（高/深/長）後將自動依菜單更新價格，也可手動微調');
     setFormRecommendedCats(model.recommendedCats || '1-2 隻貓咪');
     setFormImage(model.image);
     const existingImgs = model.images && model.images.length > 0 ? model.images : [model.image];
@@ -215,7 +177,10 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
         ? [...model.includedAccessories]
         : [...model.highlights]
     );
+    setNewHighlightInput('');
     setFormError(null);
+    setIsDraggingImages(false);
+    imageDragDepthRef.current = 0;
     setIsFormModalOpen(true);
   };
 
@@ -229,11 +194,11 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     if (!window.confirm(`確定要刪除「${model.name}」這個精選款式嗎？`)) return;
 
     try {
-      const deletedJson = localStorage.getItem(DELETED_MODELS_KEY);
+      const deletedJson = localStorage.getItem(VILLA_DELETED_KEY);
       const deletedIds: string[] = deletedJson ? JSON.parse(deletedJson) : [];
       if (!deletedIds.includes(model.id)) {
         deletedIds.push(model.id);
-        localStorage.setItem(DELETED_MODELS_KEY, JSON.stringify(deletedIds));
+        localStorage.setItem(VILLA_DELETED_KEY, JSON.stringify(deletedIds));
       }
     } catch (err) {
       console.error(err);
@@ -241,11 +206,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
 
     const updated = models.filter((m) => m.id !== model.id);
     setModels(updated);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch (err) {
-      console.error(err);
-    }
+    notifyVillaModelsUpdated(updated);
 
     try {
       await setDoc(doc(db, 'featuredModels', model.id), {
@@ -258,30 +219,90 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     }
   };
 
-  const handleMultipleImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const processImageFiles = async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList).filter((file) => file.type.startsWith('image/'));
+    if (files.length === 0) {
+      setFormError('請拖曳或選擇圖片檔案（支援 JPG / PNG / WebP）');
+      return;
+    }
 
     try {
+      setIsProcessingImages(true);
       setFormError(null);
       const compressedList: string[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (file.type.startsWith('image/')) {
-          const compressed = await compressImage(file, 960, 0.74);
-          compressedList.push(compressed);
-        }
+      for (const file of files) {
+        const compressed = await compressImage(file, 960, 0.74);
+        compressedList.push(compressed);
       }
       if (compressedList.length > 0) {
-        const updated = [...formImages, ...compressedList];
-        setFormImages(updated);
-        setFormImage(updated[0]);
+        setFormImages((prev) => {
+          const updated = [...prev, ...compressedList];
+          setFormImage(updated[0]);
+          return updated;
+        });
       }
     } catch {
       setFormError('多張照片壓縮處理失敗，請重試');
     } finally {
-      e.target.value = '';
+      setIsProcessingImages(false);
     }
+  };
+
+  const handleMultipleImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await processImageFiles(files);
+    e.target.value = '';
+  };
+
+  const hasDraggedFiles = (e: React.DragEvent) =>
+    Array.from(e.dataTransfer.types || []).includes('Files');
+
+  const handleImageDragEnter = (e: React.DragEvent) => {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    imageDragDepthRef.current += 1;
+    setIsDraggingImages(true);
+  };
+
+  const handleImageDragOver = (e: React.DragEvent) => {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleImageDragLeave = (e: React.DragEvent) => {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    imageDragDepthRef.current = Math.max(0, imageDragDepthRef.current - 1);
+    if (imageDragDepthRef.current === 0) {
+      setIsDraggingImages(false);
+    }
+  };
+
+  const handleImageDrop = async (e: React.DragEvent) => {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    imageDragDepthRef.current = 0;
+    setIsDraggingImages(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processImageFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleSetPrimaryImage = (index: number) => {
+    if (index <= 0 || index >= formImages.length) return;
+    setFormImages((prev) => {
+      const next = [...prev];
+      const [chosen] = next.splice(index, 1);
+      next.unshift(chosen);
+      setFormImage(next[0]);
+      return next;
+    });
   };
 
   const handleAddHighlightTag = () => {
@@ -295,6 +316,24 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
 
   const handleRemoveHighlightTag = (idx: number) => {
     setFormHighlights(formHighlights.filter((_, i) => i !== idx));
+  };
+
+  const moveHighlightTag = (fromIdx: number, toIdx: number) => {
+    if (
+      fromIdx === toIdx ||
+      fromIdx < 0 ||
+      toIdx < 0 ||
+      fromIdx >= formHighlights.length ||
+      toIdx >= formHighlights.length
+    ) {
+      return;
+    }
+    setFormHighlights((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -315,7 +354,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
       name: formName.trim(),
       subtitle: formSubtitle.trim() || '純實木無甲醛 · 高透耐磨安全壓克力門',
       heightGroup: formHeightGroup,
-      heightGroupLabel: `高${formHeightGroup}cm`,
+      heightGroupLabel: `高 ${formHeightGroup}cm 系列`,
       badge: formBadge.trim() || undefined,
       price: Number(formPrice) || 0,
       installFee: Number(formInstallFee) || 0,
@@ -331,24 +370,22 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
       includedAccessories: formHighlights,
       recommendedCats: formRecommendedCats.trim() || '1-2 隻貓咪',
       suitableSpace: '居家室內、客廳或陽台',
-      description: formSubtitle.trim() || '花花招財貓實木客製貓別墅'
+      description: formSubtitle.trim() || '花花招財貓實木客製貓別墅',
+      isCustomUpload: true
     };
 
     const existingIdx = models.findIndex((m) => m.id === targetId);
-    let updated: VillaModel[];
+    let rawUpdated: VillaModel[];
     if (existingIdx >= 0) {
-      updated = [...models];
-      updated[existingIdx] = newModel;
+      rawUpdated = [...models];
+      rawUpdated[existingIdx] = newModel;
     } else {
-      updated = [newModel, ...models];
+      rawUpdated = [newModel, ...models];
     }
+    const updated = sortVillaModels(rawUpdated);
 
     setModels(updated);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch (err) {
-      console.warn(err);
-    }
+    notifyVillaModelsUpdated(updated);
 
     try {
       await setDoc(doc(db, 'featuredModels', targetId), {
@@ -367,6 +404,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
         highlights: newModel.highlights,
         recommendedCats: newModel.recommendedCats,
         suitableSpace: newModel.suitableSpace,
+        description: newModel.description,
         deleted: false,
         updatedAt: new Date().toISOString()
       });
@@ -377,11 +415,13 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     setIsFormModalOpen(false);
   };
 
-  // Filter models based on user selected height group
-  const filteredModels = models.filter((model) => {
-    if (filter === 'all') return true;
-    return model.heightGroup === filter;
-  });
+  // Filter & sort models in natural A-Z / 1-99 order
+  const filteredModels = sortVillaModels(
+    models.filter((model) => {
+      if (filter === 'all') return true;
+      return model.heightGroup === filter;
+    })
+  );
 
   const PAGE_SIZE = 12;
   const totalPages = Math.ceil(filteredModels.length / PAGE_SIZE);
@@ -600,7 +640,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                   <div className="flex items-baseline justify-between gap-2">
                     <h3 className="font-serif-title font-bold text-stone-900 text-lg group-hover:text-amber-900 transition-colors">
                       <a
-                        href={`/villa/${model.id}`}
+                        href={`/villa/${encodeURIComponent(model.id)}`}
                         onClick={(e) => {
                           if (onOpenModelPage) {
                             e.preventDefault();
@@ -701,7 +741,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                     </button>
 
                     <a
-                      href={`/villa/${model.id}`}
+                      href={`/villa/${encodeURIComponent(model.id)}`}
                       onClick={(e) => {
                         if (onOpenModelPage) {
                           e.preventDefault();
@@ -797,12 +837,8 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fadeIn"
-          onClick={() => setIsFormModalOpen(false)}
         >
-          <div
-            className="bg-white rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-stone-200 overflow-y-auto max-h-[92vh]"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-stone-200 overflow-y-auto max-h-[92vh]">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-stone-200">
               <div className="flex items-center gap-2">
@@ -814,7 +850,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                     {editingModelId ? '編輯貓別墅款式卡片' : '上傳並新增貓別墅款式'}
                   </h3>
                   <p className="text-xs text-stone-500">
-                    可自由調整名稱、規格、價格、圖片及新增/刪除配置亮點標籤
+                    點擊視窗外側不會自動關閉 · 請使用右上角「✕」或「取消」離開
                   </p>
                 </div>
               </div>
@@ -822,6 +858,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                 type="button"
                 onClick={() => setIsFormModalOpen(false)}
                 className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100"
+                title="關閉視窗"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -835,11 +872,24 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
             )}
 
             <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
-              {/* Photo Upload & Preview */}
-              <div>
-                <label className="block font-bold text-stone-800 mb-1">
-                  款式外觀與多角度實拍照 * (支援連續多選上傳：主圖、開門、關門、內部、內飾等)
-                </label>
+              {/* Photo Upload & Desktop Drag-and-Drop Preview */}
+              <div
+                onDragEnter={handleImageDragEnter}
+                onDragOver={handleImageDragOver}
+                onDragLeave={handleImageDragLeave}
+                onDrop={handleImageDrop}
+                className="relative rounded-xl transition-all"
+              >
+                <div className="flex items-center justify-between mb-1 gap-2">
+                  <label className="block font-bold text-stone-800">
+                    款式外觀與多角度實拍照 * (支援桌面直接拖入多張照片)
+                  </label>
+                  {isProcessingImages && (
+                    <span className="text-[11px] font-semibold text-amber-800 animate-pulse">
+                      正在壓縮處理照片...
+                    </span>
+                  )}
+                </div>
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -848,23 +898,54 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                   onChange={handleMultipleImagesUpload}
                   className="hidden"
                 />
+
+                {isDraggingImages && (
+                  <div className="absolute inset-0 z-20 rounded-xl border-2 border-dashed border-amber-700 bg-amber-50/95 backdrop-blur-xs flex flex-col items-center justify-center text-amber-950 pointer-events-none">
+                    <Upload className="w-8 h-8 mb-1.5 text-amber-800 animate-bounce" />
+                    <span className="font-bold text-sm">放開滑鼠即可直接上傳照片</span>
+                    <span className="text-[11px] text-amber-800 mt-0.5">支援從電腦桌面一次拖曳多張圖片</span>
+                  </div>
+                )}
+
                 {formImages.length > 0 ? (
                   <div className="space-y-2">
-                    <div className="relative aspect-16/10 rounded-xl overflow-hidden bg-stone-100 border border-stone-300 flex items-center justify-center">
+                    <div
+                      className={`relative aspect-16/10 rounded-xl overflow-hidden bg-stone-100 border-2 flex items-center justify-center transition-colors ${
+                        isDraggingImages ? 'border-amber-700' : 'border-stone-300 border-solid'
+                      }`}
+                    >
                       <img src={formImage || formImages[0]} alt="款式主圖預覽" className="w-full h-full object-contain" />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="absolute bottom-2 right-2 px-3 py-1.5 bg-stone-900/80 hover:bg-stone-900 text-white rounded-lg text-xs font-semibold shadow-xs"
-                      >
-                        + 繼續添加照片 (可多選)
-                      </button>
+                      <div className="absolute bottom-2 inset-x-2 flex items-center justify-between gap-2">
+                        <span className="px-2.5 py-1 bg-white/90 text-stone-600 rounded-lg text-[10px] font-medium shadow-2xs">
+                          可繼續從桌面拖曳圖片至此區批次補圖
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-3 py-1.5 bg-stone-900/85 hover:bg-stone-900 text-white rounded-lg text-xs font-semibold shadow-xs shrink-0"
+                        >
+                          + 選擇添加照片
+                        </button>
+                      </div>
                     </div>
                     {/* Thumbnails grid */}
                     <div className="flex gap-2 overflow-x-auto pb-2">
                       {formImages.map((imgUrl, i) => (
-                        <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-stone-300 shrink-0">
-                          <img src={imgUrl} alt={`預覽 ${i + 1}`} className="w-full h-full object-cover" />
+                        <div
+                          key={i}
+                          className={`relative w-16 h-16 rounded-lg overflow-hidden border-2 shrink-0 group ${
+                            i === 0 ? 'border-amber-800' : 'border-stone-300'
+                          }`}
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={`預覽 ${i + 1}`}
+                            onClick={() => handleSetPrimaryImage(i)}
+                            className={`w-full h-full object-cover ${
+                              i > 0 ? 'cursor-pointer hover:opacity-90' : ''
+                            }`}
+                            title={i === 0 ? '目前為主圖' : '點擊設為主圖'}
+                          />
                           <button
                             type="button"
                             onClick={() => {
@@ -877,10 +958,18 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                           >
                             ✕
                           </button>
-                          {i === 0 && (
-                            <span className="absolute bottom-0 inset-x-0 bg-amber-900 text-white text-[8px] text-center font-bold">
+                          {i === 0 ? (
+                            <span className="absolute bottom-0 inset-x-0 bg-amber-900 text-white text-[9px] text-center font-bold py-0.5">
                               主圖
                             </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimaryImage(i)}
+                              className="absolute bottom-0 inset-x-0 bg-black/65 text-white text-[9px] text-center font-medium py-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              設為主圖
+                            </button>
                           )}
                         </div>
                       ))}
@@ -889,11 +978,19 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                 ) : (
                   <div
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-stone-300 hover:border-amber-700 bg-stone-50 rounded-xl p-6 text-center cursor-pointer transition-colors"
+                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                      isDraggingImages
+                        ? 'border-amber-700 bg-amber-50'
+                        : 'border-stone-300 hover:border-amber-700 bg-stone-50'
+                    }`}
                   >
                     <Upload className="w-8 h-8 text-stone-400 mx-auto mb-2" />
-                    <p className="font-semibold text-stone-700">點擊連續上傳多張實拍照片（可多選）</p>
-                    <p className="text-[11px] text-stone-400 mt-0.5">支援一次選取多張主圖、開關門、內部及配件實拍</p>
+                    <p className="font-semibold text-stone-700">
+                      將桌面多張照片拖曳到此處，或點擊批次選取上傳
+                    </p>
+                    <p className="text-[11px] text-stone-400 mt-0.5">
+                      支援一次選取／拖入多張主圖、開關門、內部及配件實拍
+                    </p>
                   </div>
                 )}
               </div>
@@ -951,8 +1048,10 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                     value={formHeightGroup}
                     onChange={(e) => {
                       const grp = e.target.value as '90' | '120' | '150' | '180';
+                      const nextH = Number(grp);
                       setFormHeightGroup(grp);
-                      setFormHeight(Number(grp));
+                      setFormHeight(nextH);
+                      applyMenuPricingForDimensions(nextH, formDepth, formLength, false);
                     }}
                     className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3 py-2 text-xs font-semibold"
                   >
@@ -976,18 +1075,35 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                 </div>
               </div>
 
-              {/* Dimensions (Height, Depth, Length) */}
-              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
-                <span className="font-bold text-stone-800 block">
-                  詳細尺寸規格 (單位：公分 cm)
-                </span>
+              {/* Dimensions (Height, Depth, Length) with Auto-Pricing */}
+              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-bold text-stone-800">
+                    詳細尺寸規格 (單位：公分 cm)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => applyMenuPricingForDimensions(formHeight, formDepth, formLength)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-950 text-[11px] font-semibold transition-colors"
+                  >
+                    <Sparkles className="w-3 h-3 text-amber-800" />
+                    <span>依尺寸套用菜單價格</span>
+                  </button>
+                </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="block text-[11px] text-stone-500 mb-1">高度 (cm)</label>
                     <input
                       type="number"
+                      min={30}
                       value={formHeight}
-                      onChange={(e) => setFormHeight(Number(e.target.value))}
+                      onChange={(e) => {
+                        const nextH = Number(e.target.value);
+                        setFormHeight(nextH);
+                        if (nextH > 0) {
+                          applyMenuPricingForDimensions(nextH, formDepth, formLength);
+                        }
+                      }}
                       className="w-full bg-white border border-stone-300 rounded-lg px-2.5 py-1.5 font-mono"
                     />
                   </div>
@@ -995,8 +1111,15 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                     <label className="block text-[11px] text-stone-500 mb-1">深度 (cm)</label>
                     <input
                       type="number"
+                      min={30}
                       value={formDepth}
-                      onChange={(e) => setFormDepth(Number(e.target.value))}
+                      onChange={(e) => {
+                        const nextD = Number(e.target.value);
+                        setFormDepth(nextD);
+                        if (nextD > 0) {
+                          applyMenuPricingForDimensions(formHeight, nextD, formLength);
+                        }
+                      }}
                       className="w-full bg-white border border-stone-300 rounded-lg px-2.5 py-1.5 font-mono"
                     />
                   </div>
@@ -1004,12 +1127,24 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                     <label className="block text-[11px] text-stone-500 mb-1">長度/面寬 (cm)</label>
                     <input
                       type="number"
+                      min={30}
                       value={formLength}
-                      onChange={(e) => setFormLength(Number(e.target.value))}
+                      onChange={(e) => {
+                        const nextL = Number(e.target.value);
+                        setFormLength(nextL);
+                        if (nextL > 0) {
+                          applyMenuPricingForDimensions(formHeight, formDepth, nextL);
+                        }
+                      }}
                       className="w-full bg-white border border-stone-300 rounded-lg px-2.5 py-1.5 font-mono"
                     />
                   </div>
                 </div>
+                {pricingAutoNote && (
+                  <div className="text-[11px] text-amber-900 bg-amber-50/90 border border-amber-200 rounded-lg px-2.5 py-1.5 font-medium">
+                    {pricingAutoNote}
+                  </div>
+                )}
               </div>
 
               {/* Pricing & Install Fee */}
@@ -1040,35 +1175,102 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                 </div>
               </div>
 
-              {/* Highlight Tag Management (Add/Delete tags dynamically) */}
+              {/* Highlight Tag Management (Add/Delete/Drag-to-reorder tags dynamically) */}
               <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <label className="font-bold text-stone-800">
-                    配置亮點標籤（可自由新增或刪除標籤）
+                    配置亮點標籤（可新增、刪除與拖動前後順序）
                   </label>
-                  <span className="text-[11px] text-stone-400">
+                  <span className="text-[11px] text-stone-400 shrink-0">
                     目前 {formHighlights.length} 個標籤
                   </span>
                 </div>
 
-                {/* Tag List with Delete Button */}
-                <div className="flex flex-wrap gap-1.5 min-h-8 p-2 bg-white rounded-lg border border-stone-200">
-                  {formHighlights.map((tag, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-950 border border-amber-200 rounded-md text-xs font-medium"
-                    >
-                      <span>{tag}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveHighlightTag(idx)}
-                        className="text-stone-400 hover:text-red-600 transition-colors"
-                        title="刪除此標籤"
-                      >
-                        ✕
-                      </button>
+                {/* Draggable Tag List with Move & Delete Buttons */}
+                <div className="flex flex-wrap gap-1.5 min-h-9 p-2 bg-white rounded-lg border border-stone-200">
+                  {formHighlights.length === 0 && (
+                    <span className="text-[11px] text-stone-400 py-0.5 px-1">
+                      尚未新增標籤，請在下方輸入後新增
                     </span>
-                  ))}
+                  )}
+                  {formHighlights.map((tag, idx) => {
+                    const isDragged = draggedTagIndex === idx;
+                    const isDragOver = dragOverTagIndex === idx && draggedTagIndex !== idx;
+                    return (
+                      <span
+                        key={`${tag}-${idx}`}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedTagIndex(idx);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', String(idx));
+                        }}
+                        onDragOver={(e) => {
+                          if (hasDraggedFiles(e)) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (dragOverTagIndex !== idx) {
+                            setDragOverTagIndex(idx);
+                          }
+                        }}
+                        onDrop={(e) => {
+                          if (hasDraggedFiles(e)) return;
+                          e.preventDefault();
+                          const rawFrom = e.dataTransfer.getData('text/plain');
+                          const fromIdx =
+                            draggedTagIndex !== null ? draggedTagIndex : Number(rawFrom);
+                          if (!Number.isNaN(fromIdx)) {
+                            moveHighlightTag(fromIdx, idx);
+                          }
+                          setDraggedTagIndex(null);
+                          setDragOverTagIndex(null);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedTagIndex(null);
+                          setDragOverTagIndex(null);
+                        }}
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border select-none cursor-grab active:cursor-grabbing transition-all ${
+                          isDragged
+                            ? 'opacity-40 scale-95 bg-amber-100 border-amber-400 text-amber-950'
+                            : isDragOver
+                              ? 'bg-amber-100 border-amber-700 text-amber-950 ring-2 ring-amber-600/40'
+                              : 'bg-amber-50 text-amber-950 border-amber-200 hover:border-amber-400'
+                        }`}
+                        title="按住左鍵可直接拖曳調整前後順序"
+                      >
+                        <GripVertical className="w-3 h-3 text-amber-700/70 shrink-0" />
+                        <span>{tag}</span>
+                        <span className="inline-flex items-center gap-0.5 ml-0.5 border-l border-amber-200/80 pl-1">
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => moveHighlightTag(idx, idx - 1)}
+                            className="text-stone-400 hover:text-amber-900 disabled:opacity-25 disabled:cursor-not-allowed p-0.5"
+                            title="往前移"
+                          >
+                            <ChevronLeft className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === formHighlights.length - 1}
+                            onClick={() => moveHighlightTag(idx, idx + 1)}
+                            className="text-stone-400 hover:text-amber-900 disabled:opacity-25 disabled:cursor-not-allowed p-0.5"
+                            title="往後移"
+                          >
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveHighlightTag(idx)}
+                            className="text-stone-400 hover:text-red-600 transition-colors p-0.5 ml-0.5 font-bold"
+                            title="刪除此標籤"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      </span>
+                    );
+                  })}
                 </div>
 
                 {/* Input for adding new tag */}

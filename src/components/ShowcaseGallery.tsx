@@ -6,13 +6,19 @@ import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
 import { useStoreOwner } from '../utils/adminAuth';
 import { StoreOwnerAuthModal } from './StoreOwnerAuthModal';
+import {
+  SHOWCASE_ADDED_EVENT,
+  SHOWCASE_FOCUS_EVENT,
+  SHOWCASE_STORAGE_KEY,
+  ShowcaseSizeCategory
+} from '../utils/showcaseSync';
 import { Upload, Plus, Filter, Maximize2, Trash2, Edit3, CheckCircle, Image as ImageIcon, AlertCircle, ChevronDown, ChevronUp, Images } from 'lucide-react';
 
 interface ShowcaseGalleryProps {
   onOpenImageZoom?: (title: string, imageUrl: string, subtitle?: string) => void;
 }
 
-const STORAGE_KEY = 'huahua_custom_showcase_photos_v2';
+const STORAGE_KEY = SHOWCASE_STORAGE_KEY;
 const DELETED_SHOWCASE_KEY = 'hhcat_deleted_showcase_ids_v1';
 
 export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
@@ -82,6 +88,25 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
       setPhotos(INITIAL_SHOWCASE_PHOTOS);
     }
 
+    // Listen to instant transfers from InStockSection & focus requests
+    const handleShowcaseAdded = (e: Event) => {
+      const added = (e as CustomEvent<ShowcasePhoto>).detail;
+      if (!added || !added.id) return;
+      setPhotos((prev) => [added, ...prev.filter((p) => p.id !== added.id)]);
+    };
+
+    const handleShowcaseFocus = (e: Event) => {
+      const targetSize = (e as CustomEvent<ShowcaseSizeCategory | 'all'>).detail;
+      if (targetSize) {
+        setSelectedSize(targetSize);
+        setShowAllPhotos(false);
+        setCurrentPage(1);
+      }
+    };
+
+    window.addEventListener(SHOWCASE_ADDED_EVENT, handleShowcaseAdded);
+    window.addEventListener(SHOWCASE_FOCUS_EVENT, handleShowcaseFocus);
+
     // Subscribe to Firestore for live showcase photo sync
     const unsubscribe = onSnapshot(
       collection(db, 'showcasePhotos'),
@@ -135,7 +160,11 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      window.removeEventListener(SHOWCASE_ADDED_EVENT, handleShowcaseAdded);
+      window.removeEventListener(SHOWCASE_FOCUS_EVENT, handleShowcaseFocus);
+      unsubscribe();
+    };
   }, []);
 
   const handleMultipleFilesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

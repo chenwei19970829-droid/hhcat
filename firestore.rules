@@ -322,6 +322,12 @@ service cloud.firestore {
       allow create, update, delete: if isValidId(photoId);
     }
 
+    // 4b. Brand Story Hua Hua Photos Collection (Public Read & List, Validated Write)
+    match /brandStoryPhotos/{photoId} {
+      allow read, list: if true;
+      allow create, update, delete: if isValidId(photoId);
+    }
+
     // 5. Daily Analytics Counters (Owner Read Only, Public +1 Increment Only)
     match /analyticsDaily/{dateId} {
       allow get, list: if isStoreOwner();

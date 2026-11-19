@@ -75,6 +75,23 @@
       },
       "required": ["id"]
     },
+    "BrandStoryPhoto": {
+      "title": "BrandStoryPhoto",
+      "description": "Brand story Hua Hua growth photos displayed in BrandStorySection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "ageStage": { "type": "string", "maxLength": 100 },
+        "dateStr": { "type": "string", "maxLength": 64 },
+        "imageUrl": { "type": "string" },
+        "storyCaption": { "type": "string", "maxLength": 500 },
+        "isCustomUpload": { "type": "boolean" },
+        "deleted": { "type": "boolean" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id"]
+    },
     "AnalyticsDaily": {
       "title": "AnalyticsDaily",
       "description": "Daily website visit, device/source breakdown, and calculator usage counters (Taiwan timezone YYYY-MM-DD)",
@@ -161,6 +178,10 @@
     "/storefrontPhotos/{photoId}": {
       "schema": "StorefrontPhoto",
       "description": "Collection of storefront real-scene carousel photos"
+    },
+    "/brandStoryPhotos/{photoId}": {
+      "schema": "BrandStoryPhoto",
+      "description": "Collection of Hua Hua growth timeline photos"
     },
     "/analyticsDaily/{dateId}": {
       "schema": "AnalyticsDaily",

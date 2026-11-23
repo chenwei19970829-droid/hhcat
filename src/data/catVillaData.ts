@@ -22,6 +22,7 @@ export interface VillaModel {
   description: string;
   badge?: string;
   isCustomUpload?: boolean;
+  watermarked?: boolean;
 }
 
 export interface MenuItemPrice {
@@ -60,6 +61,7 @@ export interface ShowcasePhoto {
   date: string;
   tags: string[];
   isCustomUpload?: boolean;
+  watermarked?: boolean;
 }
 
 export interface TravelFeeRegion {
@@ -818,6 +820,7 @@ export interface HuaHuaPhoto {
   imageUrl: string;
   storyCaption: string;
   isCustomUpload?: boolean;
+  watermarked?: boolean;
 }
 
 export const HUA_HUA_STORY = {

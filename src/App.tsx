@@ -114,11 +114,13 @@ export default function App() {
     title: string;
     imageUrl: string;
     subtitle?: string;
+    watermarkedBaked?: boolean;
   }>({
     isOpen: false,
     title: '',
     imageUrl: '',
-    subtitle: ''
+    subtitle: '',
+    watermarkedBaked: false
   });
 
   // Original Menu Modal State (5 user uploaded menu sheets)
@@ -170,12 +172,18 @@ export default function App() {
     }
   }, []);
 
-  const handleOpenImageZoom = (title: string, imageUrl: string, subtitle?: string) => {
+  const handleOpenImageZoom = (
+    title: string,
+    imageUrl: string,
+    subtitle?: string,
+    watermarkedBaked = false
+  ) => {
     setLightbox({
       isOpen: true,
       title,
       imageUrl,
-      subtitle
+      subtitle,
+      watermarkedBaked
     });
   };
 
@@ -404,6 +412,7 @@ export default function App() {
         title={lightbox.title}
         imageUrl={lightbox.imageUrl}
         subtitle={lightbox.subtitle}
+        watermarkedBaked={lightbox.watermarkedBaked}
         onClose={handleCloseLightbox}
       />
 

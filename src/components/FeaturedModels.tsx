@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FEATURED_MODELS, VillaModel } from '../data/catVillaData';
 import { MultiPhotoLightbox } from './MultiPhotoLightbox';
+import { ImageProtectionLayer, protectedMediaContainerProps } from './ImageProtectionLayer';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
@@ -39,7 +40,8 @@ import {
   X,
   AlertCircle,
   Images,
-  RefreshCw
+  RefreshCw,
+  ShieldCheck
 } from 'lucide-react';
 
 export interface FeaturedCloudSyncBridge {
@@ -120,15 +122,26 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
   const [draggedTagIndex, setDraggedTagIndex] = useState<number | null>(null);
   const [dragOverTagIndex, setDragOverTagIndex] = useState<number | null>(null);
 
+  const [autoWatermark, setAutoWatermark] = useState(true);
+  const [hadUnwatermarkedExisting, setHadUnwatermarkedExisting] = useState(false);
+  const [sessionUploadedWatermarked, setSessionUploadedWatermarked] = useState(false);
+
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [lightboxTitle, setLightboxTitle] = useState('');
   const [lightboxSubtitle, setLightboxSubtitle] = useState('');
+  const [lightboxWatermarked, setLightboxWatermarked] = useState(false);
 
-  const openLightbox = (title: string, images: string[], subtitle?: string) => {
+  const openLightbox = (
+    title: string,
+    images: string[],
+    subtitle?: string,
+    watermarkedBaked = false
+  ) => {
     setLightboxTitle(title);
     setLightboxImages(images.filter(Boolean));
     setLightboxSubtitle(subtitle || '');
+    setLightboxWatermarked(watermarkedBaked);
     setLightboxOpen(true);
   };
 
@@ -183,6 +196,9 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     setFormHighlights(['天然松木無甲醛', '靜音萬向輪', '高透壓克力門', '側邊格柵通風']);
     setNewHighlightInput('');
     setFormError(null);
+    setAutoWatermark(true);
+    setHadUnwatermarkedExisting(false);
+    setSessionUploadedWatermarked(false);
     setIsDraggingImages(false);
     imageDragDepthRef.current = 0;
     setIsFormModalOpen(true);
@@ -217,6 +233,9 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     );
     setNewHighlightInput('');
     setFormError(null);
+    setAutoWatermark(true);
+    setHadUnwatermarkedExisting(!model.watermarked);
+    setSessionUploadedWatermarked(false);
     setIsDraggingImages(false);
     imageDragDepthRef.current = 0;
     setIsFormModalOpen(true);
@@ -319,10 +338,13 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
       setFormError(null);
       const compressedList: string[] = [];
       for (const file of files) {
-        const compressed = await compressImage(file, 840, 0.7);
+        const compressed = await compressImage(file, 840, 0.7, { watermark: autoWatermark });
         compressedList.push(compressed);
       }
       if (compressedList.length > 0) {
+        if (autoWatermark) {
+          setSessionUploadedWatermarked(true);
+        }
         setFormImages((prev) => {
           const updated = [...prev, ...compressedList];
           setFormImage(updated[0]);
@@ -440,6 +462,12 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
     setIsSubmitting(true);
     setFormError(null);
 
+    const existingModel = editingModelId ? models.find((m) => m.id === editingModelId) : undefined;
+    const isWatermarkedBaked = existingModel
+      ? Boolean(existingModel.watermarked) ||
+        (!hadUnwatermarkedExisting && sessionUploadedWatermarked)
+      : sessionUploadedWatermarked || autoWatermark;
+
     const targetId = editingModelId || `custom-model-${Date.now()}`;
     const nowIso = new Date().toISOString();
     const draftModel: VillaModel = {
@@ -464,7 +492,8 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
       recommendedCats: formRecommendedCats.trim() || '1-2 隻貓咪',
       suitableSpace: '居家室內、客廳或陽台',
       description: formSubtitle.trim() || '花花招財貓實木客製貓別墅',
-      isCustomUpload: true
+      isCustomUpload: true,
+      watermarked: isWatermarkedBaked
     };
 
     const firestoreMeta = buildFirestoreVillaPayload(draftModel, nowIso);
@@ -714,12 +743,14 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
             >
               {/* Product Studio Refined Photo with Click Zoom */}
               <div
-                className="relative aspect-4/3 bg-[#F6F2EC] p-2 cursor-pointer overflow-hidden border-b border-stone-100 flex items-center justify-center"
+                {...protectedMediaContainerProps}
+                className="relative aspect-4/3 bg-[#F6F2EC] p-2 cursor-pointer overflow-hidden border-b border-stone-100 flex items-center justify-center protected-media"
                 onClick={() => {
                   openLightbox(
                     model.name,
                     imgs,
-                    `規格：${model.dimensions.dimensionCode}（高${model.dimensions.height} x 深${model.dimensions.depth} x 長${model.dimensions.length} cm）`
+                    `規格：${model.dimensions.dimensionCode}（高${model.dimensions.height} x 深${model.dimensions.depth} x 長${model.dimensions.length} cm）`,
+                    Boolean(model.watermarked)
                   );
                 }}
                 title="點擊左右滑動查看多角度實拍細節"
@@ -727,12 +758,19 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                 <img
                   src={imgs[0] || model.image}
                   alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${model.dimensions.dimensionCode}cm（${model.name}）`}
+                  draggable={false}
                   className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                   loading="lazy"
                 />
 
+                <ImageProtectionLayer
+                  showVisualLogo={!model.watermarked}
+                  badgePosition="bottom-right"
+                  size="md"
+                />
+
                 {/* Top Right Photo Count + Zoom indicator */}
-                <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 z-20">
                   {imgs.length > 1 && (
                     <span className="px-2 py-1 bg-stone-900/75 text-white text-[11px] font-semibold rounded-lg backdrop-blur-xs flex items-center gap-1">
                       <Images className="w-3.5 h-3.5 text-amber-300" />
@@ -746,19 +784,19 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
 
                 {/* Badge */}
                 {model.badge && (
-                  <div className="absolute top-3 left-3 bg-amber-900 text-white text-[11px] font-semibold px-2.5 py-1 rounded-md shadow-xs">
+                  <div className="absolute top-3 left-3 bg-amber-900 text-white text-[11px] font-semibold px-2.5 py-1 rounded-md shadow-xs z-20">
                     {model.badge}
                   </div>
                 )}
 
                 {/* Dimension tag at bottom */}
-                <div className="absolute bottom-3 left-3 bg-stone-900/80 backdrop-blur-xs text-white text-xs px-2.5 py-1 rounded font-mono">
+                <div className="absolute bottom-3 left-3 bg-stone-900/80 backdrop-blur-xs text-white text-xs px-2.5 py-1 rounded font-mono z-20">
                   {model.dimensions.dimensionCode} cm
                 </div>
 
                 {/* Store Owner Quick Controls Overlay */}
                 {isOwner && (
-                  <div className="absolute inset-x-3 bottom-12 flex items-center justify-between gap-2 z-10">
+                  <div className="absolute inset-x-3 bottom-12 flex items-center justify-between gap-2 z-20">
                     <button
                       type="button"
                       onClick={(e) => handleOpenEditModal(model, e)}
@@ -1161,6 +1199,25 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
                     </p>
                   </div>
                 )}
+
+                {/* Auto Watermark Protection Toggle */}
+                <label className="mt-2.5 flex items-start gap-2.5 p-3 rounded-xl bg-amber-50/80 border border-amber-200 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoWatermark}
+                    onChange={(e) => setAutoWatermark(e.target.checked)}
+                    className="mt-0.5 rounded border-amber-400 text-amber-900 focus:ring-amber-800"
+                  />
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-amber-950 flex items-center gap-1.5 text-xs">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-800 shrink-0" />
+                      <span>自動加上「花花招財貓 LOGO」防盜浮水印（建議開啟）</span>
+                    </div>
+                    <p className="text-[11px] text-amber-900/80 leading-relaxed">
+                      上傳照片時自動將官方 LOGO 印章與防裁切斜紋直接烙印進圖檔像素，防止同業盜圖冒用。
+                    </p>
+                  </div>
+                </label>
               </div>
 
               {/* Model Name & Badge */}
@@ -1601,6 +1658,7 @@ export const FeaturedModels: React.FC<FeaturedModelsProps> = ({
         title={lightboxTitle}
         images={lightboxImages}
         subtitle={lightboxSubtitle}
+        watermarkedBaked={lightboxWatermarked}
         onClose={() => setLightboxOpen(false)}
       />
     </section>

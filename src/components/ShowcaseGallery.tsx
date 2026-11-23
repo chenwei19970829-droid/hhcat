@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ShowcasePhoto, INITIAL_SHOWCASE_PHOTOS, STORE_INFO } from '../data/catVillaData';
 import { MultiPhotoLightbox } from './MultiPhotoLightbox';
+import { ImageProtectionLayer, protectedMediaContainerProps } from './ImageProtectionLayer';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, doc, getDocsFromServer, onSnapshot, setDoc } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
@@ -34,7 +35,8 @@ import {
   ChevronUp,
   Images,
   RefreshCw,
-  X
+  X,
+  ShieldCheck
 } from 'lucide-react';
 
 interface ShowcaseGalleryProps {
@@ -126,15 +128,26 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [autoWatermark, setAutoWatermark] = useState(true);
+  const [hadUnwatermarkedExisting, setHadUnwatermarkedExisting] = useState(false);
+  const [sessionUploadedWatermarked, setSessionUploadedWatermarked] = useState(false);
+
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [lightboxTitle, setLightboxTitle] = useState('');
   const [lightboxSubtitle, setLightboxSubtitle] = useState('');
+  const [lightboxWatermarked, setLightboxWatermarked] = useState(false);
 
-  const openLightbox = (title: string, images: string[], subtitle?: string) => {
+  const openLightbox = (
+    title: string,
+    images: string[],
+    subtitle?: string,
+    watermarkedBaked = false
+  ) => {
     setLightboxTitle(title);
     setLightboxImages(images.filter(Boolean));
     setLightboxSubtitle(subtitle || '');
+    setLightboxWatermarked(watermarkedBaked);
     setLightboxOpen(true);
   };
 
@@ -202,6 +215,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
               ? data.tags.filter((x): x is string => typeof x === 'string')
               : ['客製實品'],
             isCustomUpload: true,
+            watermarked: data.watermarked === true,
             updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : undefined
           });
         }
@@ -382,6 +396,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
       tags: localPhoto.tags || ['客製實品'],
       date: localPhoto.date || '客製實品照',
       isCustomUpload: true,
+      watermarked: Boolean(localPhoto.watermarked),
       deleted: false,
       updatedAt: nowIso
     };
@@ -481,10 +496,13 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
       setUploadError(null);
       const compressedList: string[] = [];
       for (const file of files) {
-        const compressed = await compressImage(file, 840, 0.7);
+        const compressed = await compressImage(file, 840, 0.7, { watermark: autoWatermark });
         compressedList.push(compressed);
       }
       if (compressedList.length > 0) {
+        if (autoWatermark) {
+          setSessionUploadedWatermarked(true);
+        }
         setUploadImages((prev) => {
           const updated = [...prev, ...compressedList];
           setPreviewImage(updated[0]);
@@ -513,6 +531,9 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
     setPreviewImage(null);
     setUploadImages([]);
     setUploadError(null);
+    setAutoWatermark(true);
+    setHadUnwatermarkedExisting(false);
+    setSessionUploadedWatermarked(false);
     setIsDraggingImages(false);
     imageDragDepthRef.current = 0;
   };
@@ -534,6 +555,12 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
     setIsUploading(true);
     setUploadError(null);
 
+    const existingPhoto = editingPhotoId ? photos.find((p) => p.id === editingPhotoId) : undefined;
+    const isWatermarkedBaked = existingPhoto
+      ? Boolean(existingPhoto.watermarked) ||
+        (!hadUnwatermarkedExisting && sessionUploadedWatermarked)
+      : sessionUploadedWatermarked || autoWatermark;
+
     const targetId = editingPhotoId || `custom-${Date.now()}`;
     const nowIso = new Date().toISOString();
     const parsedTags = uploadTags.split(/[,， ]+/).filter(Boolean);
@@ -547,7 +574,8 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
       customerNote: uploadCustomerNote.trim() || '店主精選客製實品照，支援同款專屬訂製。',
       date: editingPhotoId ? '已更新實拍' : '剛剛新增',
       tags: parsedTags.length > 0 ? parsedTags : ['客製實品'],
-      isCustomUpload: true
+      isCustomUpload: true,
+      watermarked: isWatermarkedBaked
     };
 
     const firestoreMeta = {
@@ -559,6 +587,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
       tags: draftPhoto.tags,
       date: draftPhoto.date,
       isCustomUpload: true,
+      watermarked: isWatermarkedBaked,
       deleted: false,
       updatedAt: nowIso
     };
@@ -663,6 +692,9 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
     setUploadImages(imgs);
     setPreviewImage(imgs[0]);
     setUploadError(null);
+    setAutoWatermark(true);
+    setHadUnwatermarkedExisting(!photo.watermarked);
+    setSessionUploadedWatermarked(false);
     setIsUploadModalOpen(true);
   };
 
@@ -927,15 +959,24 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
               <div
                 key={photo.id}
                 onClick={() => {
-                  openLightbox(photo.title, imgs, `${photo.dimensionsText} · ${photo.customerNote}`);
+                  openLightbox(
+                    photo.title,
+                    imgs,
+                    `${photo.dimensionsText} · ${photo.customerNote}`,
+                    Boolean(photo.watermarked)
+                  );
                 }}
                 className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-md hover:border-amber-800/40 transition-all cursor-pointer group flex flex-col"
               >
                 {/* Image Container */}
-                <div className="relative aspect-4/3 bg-stone-100 overflow-hidden flex items-center justify-center p-2">
+                <div
+                  {...protectedMediaContainerProps}
+                  className="relative aspect-4/3 bg-stone-100 overflow-hidden flex items-center justify-center p-2 protected-media"
+                >
                   <img
                     src={imgs[0] || photo.imageUrl}
                     alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${photo.dimensionsText}（${photo.title}）`}
+                    draggable={false}
                     className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                     onError={(e) => {
@@ -943,13 +984,19 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
                     }}
                   />
 
+                  <ImageProtectionLayer
+                    showVisualLogo={!photo.watermarked}
+                    badgePosition={isOwner ? 'above-bottom-right' : 'bottom-right'}
+                    size="md"
+                  />
+
                   {/* Size Pill */}
-                  <div className="absolute top-3 left-3 bg-stone-900/80 backdrop-blur-xs text-white text-[11px] font-mono px-2 py-0.5 rounded">
+                  <div className="absolute top-3 left-3 bg-stone-900/80 backdrop-blur-xs text-white text-[11px] font-mono px-2 py-0.5 rounded z-20">
                     {photo.sizeCategory === 'custom' ? '客製化特殊尺寸' : `長度 ${photo.sizeCategory}cm 系列`}
                   </div>
 
                   {/* Top Right Photo Count + Zoom Icon */}
-                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5 z-20">
                     {imgs.length > 1 && (
                       <span className="px-2 py-0.5 bg-stone-900/75 text-white text-[11px] font-semibold rounded backdrop-blur-xs flex items-center gap-1">
                         <Images className="w-3 h-3 text-amber-300" />
@@ -963,7 +1010,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
 
                   {/* Store Owner Edit & Delete Options */}
                   {isOwner && (
-                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
+                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 z-20">
                       <button
                         type="button"
                         onClick={(e) => handleOpenEdit(photo, e)}
@@ -1281,6 +1328,25 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
                       </p>
                     </div>
                   )}
+
+                  {/* Auto Watermark Protection Toggle */}
+                  <label className="mt-2.5 flex items-start gap-2.5 p-3 rounded-xl bg-amber-50/80 border border-amber-200 cursor-pointer select-none text-xs">
+                    <input
+                      type="checkbox"
+                      checked={autoWatermark}
+                      onChange={(e) => setAutoWatermark(e.target.checked)}
+                      className="mt-0.5 rounded border-amber-400 text-amber-900 focus:ring-amber-800"
+                    />
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-amber-950 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-amber-800 shrink-0" />
+                        <span>自動加上「花花招財貓 LOGO」防盜浮水印（建議開啟）</span>
+                      </div>
+                      <p className="text-[11px] text-amber-900/80 leading-relaxed">
+                        尤其適合客製化成品圖！上傳時自動將門市官方 LOGO 印章與防裁切斜紋烙印入像素中，避免有心人盜圖冒用。
+                      </p>
+                    </div>
+                  </label>
                 </div>
 
                 {/* Size Category */}
@@ -1501,6 +1567,7 @@ export const ShowcaseGallery: React.FC<ShowcaseGalleryProps> = () => {
         title={lightboxTitle}
         images={lightboxImages}
         subtitle={lightboxSubtitle}
+        watermarkedBaked={lightboxWatermarked}
         onClose={() => setLightboxOpen(false)}
       />
     </section>

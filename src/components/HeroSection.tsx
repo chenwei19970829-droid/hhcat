@@ -6,6 +6,7 @@ import { compressImage } from '../utils/imageCompressor';
 import { useStoreOwner } from '../utils/adminAuth';
 import { StoreOwnerAuthModal } from './StoreOwnerAuthModal';
 import { MultiPhotoLightbox } from './MultiPhotoLightbox';
+import { ImageProtectionLayer, protectedMediaContainerProps } from './ImageProtectionLayer';
 import { CloudErrorState, CloudSyncStatusBar } from './CloudSyncStatusBar';
 import {
   fitImagesWithinFirestoreLimit,
@@ -40,6 +41,7 @@ interface StorefrontPhotoItem {
   imageUrl: string;
   caption?: string;
   isDefault?: boolean;
+  watermarked?: boolean;
 }
 
 interface HeroSectionProps {
@@ -130,6 +132,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessingImages, setIsProcessingImages] = useState(false);
+  const [autoWatermark, setAutoWatermark] = useState(true);
 
   // In-app delete confirmation modal
   const [deletingPhoto, setDeletingPhoto] = useState<StorefrontPhotoItem | null>(null);
@@ -155,7 +158,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             caption:
               typeof data.caption === 'string' && data.caption
                 ? data.caption
-                : '實體門店現場實景 · 臺中豐原'
+                : '實體門店現場實景 · 臺中豐原',
+            watermarked: data.watermarked === true
           });
         }
       });
@@ -348,6 +352,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     const meta = {
       id: localPhoto.id,
       caption: localPhoto.caption || '臺中豐原門店實景展示',
+      watermarked: Boolean(localPhoto.watermarked),
       deleted: false,
       createdAt: nowIso
     };
@@ -407,7 +412,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (file.type.startsWith('image/')) {
-          const compressed = await compressImage(file, 840, 0.7);
+          const compressed = await compressImage(file, 840, 0.7, { watermark: autoWatermark });
           compressedList.push(compressed);
         }
       }
@@ -442,6 +447,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         const meta = {
           id: newId,
           caption: captionText,
+          watermarked: autoWatermark,
           deleted: false,
           createdAt: nowIso
         };
@@ -456,7 +462,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         const item: StorefrontPhotoItem = {
           id: newId,
           imageUrl: fitted.images[0],
-          caption: captionText
+          caption: captionText,
+          watermarked: autoWatermark
         };
 
         await setDoc(doc(db, 'storefrontPhotos', newId), {
@@ -886,7 +893,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 onClick={() => setLightboxOpen(true)}
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
-                className="relative mt-3.5 rounded-xl overflow-hidden aspect-4/3 sm:aspect-16/11 bg-stone-100 border border-amber-900/10 cursor-pointer group select-none touch-pan-y"
+                {...protectedMediaContainerProps}
+                className="relative mt-3.5 rounded-xl overflow-hidden aspect-4/3 sm:aspect-16/11 bg-stone-100 border border-amber-900/10 cursor-pointer group select-none touch-pan-y protected-media"
               >
                 <img
                   src={currentPhoto.imageUrl}
@@ -898,8 +906,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 {/* Gradient vignette */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-black/20 pointer-events-none" />
 
+                <ImageProtectionLayer
+                  showVisualLogo={!currentPhoto.watermarked}
+                  badgePosition="top-right-below"
+                  size="md"
+                />
+
                 {/* Top Overlay: Counter & Zoom Hint */}
-                <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+                <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-20">
                   <div className="bg-stone-900/80 backdrop-blur-xs text-white text-[11px] font-semibold px-2.5 py-1 rounded-md border border-white/20">
                     {currentPhoto.caption || '實體門店現場實景 · 臺中豐原'}
                   </div>
@@ -916,7 +930,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     <button
                       type="button"
                       onClick={handlePrevSlide}
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/85 hover:bg-white text-stone-900 shadow-lg backdrop-blur-xs transition-all hover:scale-105 active:scale-95 z-10"
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/85 hover:bg-white text-stone-900 shadow-lg backdrop-blur-xs transition-all hover:scale-105 active:scale-95 z-20"
                       aria-label="上一張門店實景"
                     >
                       <ChevronLeft className="w-5 h-5" />
@@ -924,7 +938,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     <button
                       type="button"
                       onClick={handleNextSlide}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/85 hover:bg-white text-stone-900 shadow-lg backdrop-blur-xs transition-all hover:scale-105 active:scale-95 z-10"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-white/85 hover:bg-white text-stone-900 shadow-lg backdrop-blur-xs transition-all hover:scale-105 active:scale-95 z-20"
                       aria-label="下一張門店實景"
                     >
                       <ChevronRight className="w-5 h-5" />
@@ -933,7 +947,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 )}
 
                 {/* Bottom Info & Pagination Dots */}
-                <div className="absolute bottom-3 left-3 right-3 text-white flex items-end justify-between gap-2">
+                <div className="absolute bottom-3 left-3 right-3 text-white flex items-end justify-between gap-2 z-20">
                   <div className="min-w-0">
                     <div className="text-xs font-bold leading-snug drop-shadow-sm truncate">
                       客製化 精品實木貓別墅 倉儲中心
@@ -1110,6 +1124,24 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     <p className="text-[11px] text-stone-400 mt-1">上傳後自動壓縮並同步顯示於所有訪客手機與電腦</p>
                   </div>
                 )}
+
+                <label className="mt-2.5 flex items-start gap-2.5 p-3 rounded-xl bg-amber-50/80 border border-amber-200 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoWatermark}
+                    onChange={(e) => setAutoWatermark(e.target.checked)}
+                    className="mt-0.5 rounded border-amber-400 text-amber-900 focus:ring-amber-800"
+                  />
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-amber-950 flex items-center gap-1.5 text-xs">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-800 shrink-0" />
+                      <span>自動加上「花花招財貓 LOGO」防盜浮水印（建議開啟）</span>
+                    </div>
+                    <p className="text-[11px] text-amber-900/80 leading-relaxed">
+                      上傳門店實景照時自動將官方 LOGO 印章與防裁切斜紋烙印入圖檔像素中，防止盜圖。
+                    </p>
+                  </div>
+                </label>
               </div>
 
               <div>
@@ -1253,6 +1285,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         images={storefrontPhotos.map((p) => p.imageUrl)}
         initialIndex={activeIndex}
         subtitle={`${STORE_INFO.address} · 預約專線 ${STORE_INFO.phoneDisplay}`}
+        watermarkedBaked={Boolean(currentPhoto.watermarked)}
         onClose={() => setLightboxOpen(false)}
       />
     </section>

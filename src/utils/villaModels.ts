@@ -341,7 +341,8 @@ export function parseFirestoreVillaModel(
             : '居家室內、客廳或陽台',
         description:
           typeof data.description === 'string' && data.description ? data.description : subtitle,
-        isCustomUpload: true
+        isCustomUpload: true,
+        watermarked: data.watermarked === true
       }
     };
   }
@@ -365,6 +366,7 @@ export function buildFirestoreVillaPayload(model: VillaModel, updatedAtIso: stri
     recommendedCats: model.recommendedCats,
     suitableSpace: model.suitableSpace,
     description: model.description,
+    watermarked: Boolean(model.watermarked),
     deleted: false,
     updatedAt: updatedAtIso
   };

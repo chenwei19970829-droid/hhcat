@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { STORE_INFO, ShowcasePhoto } from '../data/catVillaData';
 import { MultiPhotoLightbox } from './MultiPhotoLightbox';
+import { ImageProtectionLayer, protectedMediaContainerProps } from './ImageProtectionLayer';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, onSnapshot, doc, setDoc, getDocsFromServer } from 'firebase/firestore';
 import { compressImage } from '../utils/imageCompressor';
@@ -40,7 +41,8 @@ import {
   ChevronLeft,
   ChevronRight,
   GripVertical,
-  RefreshCw
+  RefreshCw,
+  ShieldCheck
 } from 'lucide-react';
 
 export interface InStockItem {
@@ -56,6 +58,7 @@ export interface InStockItem {
   description: string;
   features: string[];
   isCustomUpload?: boolean;
+  watermarked?: boolean;
   dateAdded?: string;
   updatedAt?: string;
 }
@@ -173,6 +176,7 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
   const [lightboxTitle, setLightboxTitle] = useState('');
   const [lightboxSubtitle, setLightboxSubtitle] = useState('');
   const [lightboxInitialIndex, setLightboxInitialIndex] = useState(0);
+  const [lightboxWatermarked, setLightboxWatermarked] = useState(false);
 
   // Upload / Edit Form Modal State
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -186,6 +190,9 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
   const [formImages, setFormImages] = useState<string[]>([]);
   const [formError, setFormError] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [autoWatermark, setAutoWatermark] = useState(true);
+  const [hadUnwatermarkedExisting, setHadUnwatermarkedExisting] = useState(false);
+  const [sessionUploadedWatermarked, setSessionUploadedWatermarked] = useState(false);
 
   // Drag & Drop States (Desktop file drop, photo reordering, and feature tag reordering)
   const [isDraggingImages, setIsDraggingImages] = useState(false);
@@ -225,6 +232,7 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
     setLightboxImages(imgs);
     setLightboxSubtitle(`${item.sizeTag}${item.priceText ? ` · ${item.priceText}` : ''} · 豐原門店現貨實拍（可現場自取或叫車載回）`);
     setLightboxInitialIndex(startIndex);
+    setLightboxWatermarked(Boolean(item.watermarked));
     setLightboxOpen(true);
   };
 
@@ -281,6 +289,7 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
             ? data.features.filter((x): x is string => typeof x === 'string')
             : ['純實木厚度1.5cm'],
           isCustomUpload: true,
+          watermarked: data.watermarked === true,
           dateAdded: '門店最新實拍',
           updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : undefined
         });
@@ -443,6 +452,7 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
       description: localItem.description,
       features: localItem.features || [],
       isCustomUpload: true,
+      watermarked: Boolean(localItem.watermarked),
       deleted: false,
       updatedAt: nowIso
     };
@@ -592,6 +602,9 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
     setNewFeatureTagInput('');
     setFormImages([]);
     setFormError('');
+    setAutoWatermark(true);
+    setHadUnwatermarkedExisting(false);
+    setSessionUploadedWatermarked(false);
     setIsDraggingImages(false);
     imageDragDepthRef.current = 0;
     setDraggedImageIndex(null);
@@ -626,6 +639,9 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
     setNewFeatureTagInput('');
     setFormImages(getItemImages(item));
     setFormError('');
+    setAutoWatermark(true);
+    setHadUnwatermarkedExisting(!item.watermarked);
+    setSessionUploadedWatermarked(false);
     setIsDraggingImages(false);
     imageDragDepthRef.current = 0;
     setDraggedImageIndex(null);
@@ -752,6 +768,7 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
       tags: parsedTags.length > 0 ? parsedTags : ['已售出實品', '客製實木'],
       date: '門店售出實品',
       isCustomUpload: true,
+      watermarked: Boolean(transferringItem.watermarked),
       deleted: false,
       updatedAt: nowIso
     };
@@ -796,7 +813,8 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
       customerNote: showcaseMeta.description,
       date: showcaseMeta.date,
       tags: showcaseMeta.tags,
-      isCustomUpload: true
+      isCustomUpload: true,
+      watermarked: Boolean(transferringItem.watermarked)
     };
 
     // Update ShowcaseGallery UI & localStorage cache only AFTER cloud write succeeded
@@ -858,10 +876,13 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
       setFormError('');
       const compressedList: string[] = [];
       for (const file of files) {
-        const compressed = await compressImage(file, 840, 0.7);
+        const compressed = await compressImage(file, 840, 0.7, { watermark: autoWatermark });
         compressedList.push(compressed);
       }
       if (compressedList.length > 0) {
+        if (autoWatermark) {
+          setSessionUploadedWatermarked(true);
+        }
         setFormImages((prev) => [...prev, ...compressedList]);
       }
     } catch {
@@ -1002,6 +1023,12 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
 
     setIsSubmitting(true);
     setFormError('');
+    const existingItem = editingItemId ? items.find((it) => it.id === editingItemId) : undefined;
+    const isWatermarkedBaked = existingItem
+      ? Boolean(existingItem.watermarked) ||
+        (!hadUnwatermarkedExisting && sessionUploadedWatermarked)
+      : sessionUploadedWatermarked || autoWatermark;
+
     const targetId = editingItemId || `instock-custom-${Date.now()}`;
     const nowIso = new Date().toISOString();
 
@@ -1016,6 +1043,7 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
         '台中豐原店內現成款式，已組裝完畢，可直接自取搬走或叫貨車拉走。',
       features: finalFeatures,
       isCustomUpload: true,
+      watermarked: isWatermarkedBaked,
       deleted: false,
       updatedAt: nowIso
     };
@@ -1058,6 +1086,7 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
         description: baseMeta.description,
         features: finalFeatures,
         isCustomUpload: true,
+        watermarked: isWatermarkedBaked,
         dateAdded: '門店最新實拍',
         updatedAt: nowIso
       };
@@ -1277,18 +1306,28 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
                   className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-amber-700/50 transition-all flex flex-col group relative cursor-pointer"
                 >
                   {/* Photo Gallery Area */}
-                  <div className="relative aspect-4/3 bg-stone-100 overflow-hidden">
+                  <div
+                    {...protectedMediaContainerProps}
+                    className="relative aspect-4/3 bg-stone-100 overflow-hidden protected-media"
+                  >
                     <img
                       src={allImgs[0] || item.mainImage}
                       alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${item.sizeTag}（${item.title}）`}
+                      draggable={false}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
 
                     {/* Gradient Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-stone-950/70 via-transparent to-black/20 pointer-events-none" />
 
+                    <ImageProtectionLayer
+                      showVisualLogo={!item.watermarked}
+                      badgePosition="bottom-right"
+                      size="md"
+                    />
+
                     {/* Top Badges */}
-                    <div className="absolute top-3.5 left-3.5 flex items-center gap-2">
+                    <div className="absolute top-3.5 left-3.5 flex items-center gap-2 z-20">
                       <span className="px-2.5 py-1 bg-amber-900 text-white text-[11px] font-bold rounded-lg shadow-sm font-mono tracking-wide">
                         {item.sizeTag}
                       </span>
@@ -1298,7 +1337,7 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
                     </div>
 
                     {/* Top Right Photo Count + Zoom indicator */}
-                    <div className="absolute top-3.5 right-3.5 flex items-center gap-1.5">
+                    <div className="absolute top-3.5 right-3.5 flex items-center gap-1.5 z-20">
                       {allImgs.length > 1 && (
                         <span className="px-2 py-1 bg-stone-900/75 text-white text-[11px] font-semibold rounded-lg backdrop-blur-xs flex items-center gap-1">
                           <Images className="w-3.5 h-3.5 text-amber-300" />
@@ -1315,7 +1354,7 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
 
                     {/* Multi-angle Hint Bar & Quick Jump */}
                     {allImgs.length > 1 && (
-                      <div className="absolute bottom-3 left-3 flex items-center gap-1.5 text-white text-xs">
+                      <div className="absolute bottom-3 left-3 flex items-center gap-1.5 text-white text-xs z-20">
                         <span className="text-[10px] bg-black/65 px-2 py-0.5 rounded-md backdrop-blur-xs">
                           點擊看主圖/關門/開門/內飾 ({allImgs.length}張)
                         </span>
@@ -1694,6 +1733,25 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
                     </p>
                   </div>
                 )}
+
+                {/* Auto Watermark Protection Toggle */}
+                <label className="mt-2.5 flex items-start gap-2.5 p-3 rounded-xl bg-amber-50/80 border border-amber-200 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoWatermark}
+                    onChange={(e) => setAutoWatermark(e.target.checked)}
+                    className="mt-0.5 rounded border-amber-400 text-amber-900 focus:ring-amber-800"
+                  />
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-amber-950 flex items-center gap-1.5 text-xs">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-800 shrink-0" />
+                      <span>自動加上「花花招財貓 LOGO」防盜浮水印（建議開啟）</span>
+                    </div>
+                    <p className="text-[11px] text-amber-900/80 leading-relaxed">
+                      上傳照片時自動將官方 LOGO 印章與防裁切斜紋直接寫入像素中，防盜圖且日後轉移至實品相冊也會完整保留！
+                    </p>
+                  </div>
+                </label>
               </div>
 
               {/* Title */}
@@ -2232,6 +2290,7 @@ export const InStockSection: React.FC<InStockSectionProps> = () => {
         images={lightboxImages}
         subtitle={lightboxSubtitle}
         initialIndex={lightboxInitialIndex}
+        watermarkedBaked={lightboxWatermarked}
         onClose={() => setLightboxOpen(false)}
       />
     </section>

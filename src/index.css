@@ -61,3 +61,18 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #b8a691;
 }
+
+/* Anti-theft image shield: blocks mobile long-press save menu & drag-saving */
+.protected-media {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.protected-media img {
+  pointer-events: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+

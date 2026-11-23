@@ -1,12 +1,14 @@
 import React, { useEffect } from 'react';
 import { X, ZoomIn, ZoomOut, Download, MessageCircle } from 'lucide-react';
 import { STORE_INFO } from '../data/catVillaData';
+import { ImageProtectionLayer, protectedMediaContainerProps } from './ImageProtectionLayer';
 
 interface LightboxModalProps {
   isOpen: boolean;
   title: string;
   imageUrl: string;
   subtitle?: string;
+  watermarkedBaked?: boolean;
   onClose: () => void;
 }
 
@@ -15,6 +17,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
   title,
   imageUrl,
   subtitle,
+  watermarkedBaked = false,
   onClose
 }) => {
   useEffect(() => {
@@ -77,12 +80,23 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
         </div>
 
         {/* High Resolution Image Container */}
-        <div className="flex-1 bg-stone-900/95 p-4 flex items-center justify-center overflow-auto min-h-[300px]">
-          <img
-            src={imageUrl}
-            alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${title}${subtitle ? `-${subtitle}` : ''}`}
-            className="max-h-[72vh] w-auto max-w-full object-contain rounded shadow-lg select-none"
-          />
+        <div
+          className="flex-1 bg-stone-900/95 p-4 flex items-center justify-center overflow-auto min-h-[300px] protected-media"
+          {...protectedMediaContainerProps}
+        >
+          <div className="relative inline-flex items-center justify-center rounded overflow-hidden shadow-lg protected-media">
+            <img
+              src={imageUrl}
+              alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${title}${subtitle ? `-${subtitle}` : ''}`}
+              className="max-h-[72vh] w-auto max-w-full object-contain select-none"
+              draggable={false}
+            />
+            <ImageProtectionLayer
+              showVisualLogo={!watermarkedBaked}
+              badgePosition="bottom-right"
+              size="lg"
+            />
+          </div>
         </div>
 
         {/* Footer info */}

@@ -6,6 +6,7 @@ import {
   STORE_INFO
 } from '../data/catVillaData';
 import { MultiPhotoLightbox } from './MultiPhotoLightbox';
+import { ImageProtectionLayer, protectedMediaContainerProps } from './ImageProtectionLayer';
 import { trackEvent } from '../utils/analytics';
 import {
   ArrowLeft,
@@ -163,14 +164,21 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
           <div className="lg:col-span-6 lg:sticky lg:top-24 space-y-4">
             <div
               onClick={() => setLightboxOpen(true)}
-              className="relative aspect-4/3 bg-[#F6F2EC] rounded-2xl border border-stone-200 overflow-hidden cursor-pointer group flex items-center justify-center p-3 shadow-xs"
+              {...protectedMediaContainerProps}
+              className="relative aspect-4/3 bg-[#F6F2EC] rounded-2xl border border-stone-200 overflow-hidden cursor-pointer group flex items-center justify-center p-3 shadow-xs protected-media"
             >
               <img
                 src={images[selectedPhotoIdx] || model.image}
                 alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${model.dimensions.dimensionCode}cm（${model.name}）`}
+                draggable={false}
                 className="w-full h-full object-contain group-hover:scale-[1.02] transition-transform duration-300"
               />
-              <div className="absolute top-3 right-3 flex items-center gap-1.5">
+              <ImageProtectionLayer
+                showVisualLogo={!model.watermarked}
+                badgePosition="bottom-right"
+                size="lg"
+              />
+              <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
                 {images.length > 1 && (
                   <span className="px-2.5 py-1 bg-stone-900/75 text-white text-xs font-semibold rounded-lg flex items-center gap-1">
                     <Images className="w-3.5 h-3.5 text-amber-300" />
@@ -183,7 +191,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   <Maximize2 className="w-4 h-4" />
                 </span>
               </div>
-              <div className="absolute bottom-3 left-3 bg-stone-900/80 text-white text-xs font-mono px-2.5 py-1 rounded">
+              <div className="absolute bottom-3 left-3 bg-stone-900/80 text-white text-xs font-mono px-2.5 py-1 rounded z-10">
                 {model.dimensions.dimensionCode} cm
               </div>
             </div>
@@ -195,7 +203,8 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                     key={idx}
                     type="button"
                     onClick={() => setSelectedPhotoIdx(idx)}
-                    className={`aspect-4/3 rounded-xl overflow-hidden border bg-[#F6F2EC] p-1 transition-all ${
+                    {...protectedMediaContainerProps}
+                    className={`aspect-4/3 rounded-xl overflow-hidden border bg-[#F6F2EC] p-1 transition-all protected-media ${
                       selectedPhotoIdx === idx
                         ? 'border-amber-900 ring-2 ring-amber-900/20'
                         : 'border-stone-200 hover:border-stone-400 opacity-80 hover:opacity-100'
@@ -204,6 +213,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                     <img
                       src={imgUrl}
                       alt={`${model.name} 實拍角度 ${idx + 1}`}
+                      draggable={false}
                       className="w-full h-full object-contain"
                     />
                   </button>
@@ -506,12 +516,21 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 onClick={() => onNavigateToPath(`/villa/${encodeURIComponent(rel.id)}`)}
                 className="bg-white rounded-2xl border border-stone-200 overflow-hidden hover:shadow-md hover:border-amber-800/40 transition-all cursor-pointer flex flex-col"
               >
-                <div className="aspect-4/3 bg-[#F6F2EC] p-2 border-b border-stone-100">
+                <div
+                  {...protectedMediaContainerProps}
+                  className="relative aspect-4/3 bg-[#F6F2EC] p-2 border-b border-stone-100 overflow-hidden protected-media"
+                >
                   <img
                     src={rel.image}
                     alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${rel.dimensions.dimensionCode}cm（${rel.name}）`}
+                    draggable={false}
                     className="w-full h-full object-contain"
                     loading="lazy"
+                  />
+                  <ImageProtectionLayer
+                    showVisualLogo={!rel.watermarked}
+                    badgePosition="bottom-right"
+                    size="sm"
                   />
                 </div>
                 <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
@@ -540,6 +559,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
         images={images}
         initialIndex={selectedPhotoIdx}
         subtitle={`規格：${model.dimensions.dimensionCode}（高${model.dimensions.height} x 深${model.dimensions.depth} x 長${model.dimensions.length} cm）`}
+        watermarkedBaked={Boolean(model.watermarked)}
         onClose={() => setLightboxOpen(false)}
       />
     </div>

@@ -6,7 +6,7 @@ import { isStoreOwnerLoggedIn } from './adminAuth';
 
 declare global {
   interface Window {
-    dataLayer?: Array<Record<string, unknown>>;
+    dataLayer?: Array<unknown>;
     gtag?: (...args: unknown[]) => void;
     fbq?: (...args: unknown[]) => void;
   }
@@ -51,6 +51,7 @@ const ESTIMATOR_SESSION_KEY = 'hhcat_est_session_day_v1';
 
 let lastPageVisitKey = '';
 let lastPageVisitTs = 0;
+let hasRecordedInitialPage = false;
 let lastModelViewKey = '';
 let lastModelViewTs = 0;
 let lastLineTrackTs = 0;
@@ -249,7 +250,6 @@ const writeAllPeriodMetrics = async (
 };
 
 export const recordPageVisit = async (rawPath: string) => {
-  if (shouldSkipTracking()) return;
   const normalizedPath = (rawPath || '/').replace(/\/+$/, '') || '/';
   const now = Date.now();
   if (normalizedPath === lastPageVisitKey && now - lastPageVisitTs < 2000) {
@@ -257,6 +257,26 @@ export const recordPageVisit = async (rawPath: string) => {
   }
   lastPageVisitKey = normalizedPath;
   lastPageVisitTs = now;
+
+  // Send SPA virtual page_view (skip very first initial load since gtag('config') already fires it)
+  if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
+    if (hasRecordedInitialPage) {
+      window.gtag('event', 'page_view', {
+        page_path: normalizedPath,
+        page_location: window.location.href,
+        page_title: document.title
+      });
+    }
+    if (normalizedPath === '/taichung-showroom') {
+      window.gtag('event', 'high_intent_visit', {
+        intent_type: 'showroom_page',
+        page_path: normalizedPath
+      });
+    }
+  }
+  hasRecordedInitialPage = true;
+
+  if (shouldSkipTracking()) return;
 
   const dateKey = getTaiwanDateKey();
   const weekKey = getTaiwanWeekMondayKey(dateKey);
@@ -349,14 +369,29 @@ export const recordModelStat = async (
 
 export const trackEvent = (eventName: string, params?: Record<string, unknown>) => {
   if (typeof window === 'undefined') return;
+  const isDuplicateLineClick = eventName === 'line_click' && wasLineRecentlyTracked();
+  const isLeadConversion =
+    eventName === 'estimator_line_quote' ||
+    eventName === 'pdp_line_quote' ||
+    eventName === 'showroom_line_booking' ||
+    eventName === 'phone_click' ||
+    eventName === 'qr_open' ||
+    (eventName === 'line_click' && !isDuplicateLineClick);
+
   try {
-    if (Array.isArray(window.dataLayer)) {
+    if (Array.isArray(window.dataLayer) && typeof window.gtag !== 'function') {
       window.dataLayer.push({ event: eventName, ...params });
     }
-    if (typeof window.gtag === 'function') {
+    if (typeof window.gtag === 'function' && !isDuplicateLineClick) {
       window.gtag('event', eventName, params || {});
+      if (isLeadConversion) {
+        window.gtag('event', 'high_intent_visit', {
+          intent_type: eventName,
+          ...params
+        });
+      }
     }
-    if (typeof window.fbq === 'function') {
+    if (typeof window.fbq === 'function' && !isDuplicateLineClick) {
       window.fbq('trackCustom', eventName, params || {});
     }
   } catch {

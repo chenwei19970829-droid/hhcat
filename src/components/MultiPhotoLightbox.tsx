@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight, MessageCircle, Sparkles } from 'lucide-react';
 import { STORE_INFO } from '../data/catVillaData';
+import { ImageProtectionLayer, protectedMediaContainerProps } from './ImageProtectionLayer';
 
 interface MultiPhotoLightboxProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface MultiPhotoLightboxProps {
   images: string[];
   subtitle?: string;
   initialIndex?: number;
+  watermarkedBaked?: boolean;
   onClose: () => void;
 }
 
@@ -17,6 +19,7 @@ export const MultiPhotoLightbox: React.FC<MultiPhotoLightboxProps> = ({
   images,
   subtitle,
   initialIndex = 0,
+  watermarkedBaked = false,
   onClose
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -129,16 +132,24 @@ export const MultiPhotoLightbox: React.FC<MultiPhotoLightboxProps> = ({
 
         {/* Main Image View Area with Left/Right Arrows & Touch Swipe */}
         <div
-          className="relative flex-1 bg-stone-900 p-4 sm:p-8 flex items-center justify-center min-h-[320px] sm:min-h-[480px] touch-pan-y"
+          className="relative flex-1 bg-stone-900 p-4 sm:p-8 flex items-center justify-center min-h-[320px] sm:min-h-[480px] touch-pan-y protected-media"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
+          {...protectedMediaContainerProps}
         >
-          <img
-            src={currentImg}
-            alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${title}${subtitle ? `-${subtitle}` : ''}-實拍第${currentIndex + 1}張`}
-            className="max-h-[62vh] w-auto max-w-full object-contain rounded-xl shadow-2xl select-none transition-all duration-300"
-            draggable={false}
-          />
+          <div className="relative inline-flex items-center justify-center rounded-xl overflow-hidden shadow-2xl protected-media">
+            <img
+              src={currentImg}
+              alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${title}${subtitle ? `-${subtitle}` : ''}-實拍第${currentIndex + 1}張`}
+              className="max-h-[62vh] w-auto max-w-full object-contain select-none transition-all duration-300"
+              draggable={false}
+            />
+            <ImageProtectionLayer
+              showVisualLogo={!watermarkedBaked}
+              badgePosition="bottom-right"
+              size="lg"
+            />
+          </div>
 
           {/* Left / Right Navigation Arrows */}
           {validImages.length > 1 && (
@@ -146,7 +157,7 @@ export const MultiPhotoLightbox: React.FC<MultiPhotoLightboxProps> = ({
               <button
                 type="button"
                 onClick={handlePrev}
-                className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-white/85 hover:bg-white text-stone-900 shadow-xl backdrop-blur-md transition-all hover:scale-110 active:scale-95"
+                className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-white/85 hover:bg-white text-stone-900 shadow-xl backdrop-blur-md transition-all hover:scale-110 active:scale-95 z-10"
                 aria-label="上一張"
               >
                 <ChevronLeft className="w-6 h-6" />
@@ -154,7 +165,7 @@ export const MultiPhotoLightbox: React.FC<MultiPhotoLightboxProps> = ({
               <button
                 type="button"
                 onClick={handleNext}
-                className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-white/85 hover:bg-white text-stone-900 shadow-xl backdrop-blur-md transition-all hover:scale-110 active:scale-95"
+                className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-white/85 hover:bg-white text-stone-900 shadow-xl backdrop-blur-md transition-all hover:scale-110 active:scale-95 z-10"
                 aria-label="下一張"
               >
                 <ChevronRight className="w-6 h-6" />
@@ -165,7 +176,10 @@ export const MultiPhotoLightbox: React.FC<MultiPhotoLightboxProps> = ({
 
         {/* Thumbnail Selector Bar at Bottom */}
         {validImages.length > 1 && (
-          <div className="px-4 py-3 bg-[#FAF8F5] border-t border-stone-200 flex items-center justify-center gap-2 overflow-x-auto no-scrollbar">
+          <div
+            className="px-4 py-3 bg-[#FAF8F5] border-t border-stone-200 flex items-center justify-center gap-2 overflow-x-auto no-scrollbar protected-media"
+            {...protectedMediaContainerProps}
+          >
             {validImages.map((img, idx) => (
               <button
                 key={idx}
@@ -177,7 +191,12 @@ export const MultiPhotoLightbox: React.FC<MultiPhotoLightboxProps> = ({
                     : 'border-stone-300 opacity-70 hover:opacity-100'
                 }`}
               >
-                <img src={img} alt={`縮圖 ${idx + 1}`} className="w-full h-full object-cover" />
+                <img
+                  src={img}
+                  alt={`縮圖 ${idx + 1}`}
+                  className="w-full h-full object-cover"
+                  draggable={false}
+                />
                 {idx === 0 && (
                   <span className="absolute bottom-0 inset-x-0 bg-amber-900/80 text-white text-[9px] font-bold text-center py-0.5">
                     主圖

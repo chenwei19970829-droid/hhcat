@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MENU_CATEGORIES, STORE_INFO } from '../data/catVillaData';
+import { ImageProtectionLayer, protectedMediaContainerProps } from './ImageProtectionLayer';
 import { X, ChevronLeft, ChevronRight, MessageCircle, FileText } from 'lucide-react';
 
 interface OriginalMenuModalProps {
@@ -104,7 +105,7 @@ export const OriginalMenuModal: React.FC<OriginalMenuModalProps> = ({
 
         {/* Main Image viewer */}
         <div
-          className="relative flex-1 bg-stone-900 p-4 flex items-center justify-center overflow-auto min-h-[350px] touch-pan-y"
+          className="relative flex-1 bg-stone-900 p-4 flex items-center justify-center overflow-auto min-h-[350px] touch-pan-y protected-media"
           onTouchStart={(e) => {
             if (e.touches && e.touches.length > 0) {
               setTouchStartX(e.touches[0].clientX);
@@ -120,6 +121,7 @@ export const OriginalMenuModal: React.FC<OriginalMenuModalProps> = ({
             }
             setTouchStartX(null);
           }}
+          {...protectedMediaContainerProps}
         >
           <button
             type="button"
@@ -130,12 +132,19 @@ export const OriginalMenuModal: React.FC<OriginalMenuModalProps> = ({
             <ChevronLeft className="w-6 h-6" />
           </button>
 
-          <img
-            src={currentCategory.originalImage}
-            alt={currentCategory.title}
-            className="max-h-[68vh] w-auto max-w-full object-contain rounded shadow-lg select-none"
-            draggable={false}
-          />
+          <div className="relative inline-flex items-center justify-center rounded overflow-hidden shadow-lg protected-media">
+            <img
+              src={currentCategory.originalImage}
+              alt={currentCategory.title}
+              className="max-h-[68vh] w-auto max-w-full object-contain select-none"
+              draggable={false}
+            />
+            <ImageProtectionLayer
+              showVisualLogo={true}
+              badgePosition="bottom-right"
+              size="lg"
+            />
+          </div>
 
           <button
             type="button"

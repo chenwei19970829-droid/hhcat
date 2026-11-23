@@ -4,6 +4,7 @@ import {
   INITIAL_SHOWCASE_PHOTOS
 } from '../data/catVillaData';
 import { trackEvent } from '../utils/analytics';
+import { ImageProtectionLayer, protectedMediaContainerProps } from './ImageProtectionLayer';
 import {
   ArrowLeft,
   Calculator,
@@ -140,11 +141,22 @@ export const TopicGuidePage: React.FC<TopicGuidePageProps> = ({
 
             <div className="lg:col-span-6">
               <div className="rounded-2xl overflow-hidden border border-stone-200 bg-white p-3 shadow-sm">
-                <img
-                  src={STORE_INFO.storefrontImage}
-                  alt="花花招財貓-台中豐原客製化1.5cm松木貓別墅-實體門店圓環西路97號實景"
-                  className="w-full aspect-4/3 object-cover rounded-xl"
-                />
+                <div
+                  {...protectedMediaContainerProps}
+                  className="relative aspect-4/3 rounded-xl overflow-hidden protected-media"
+                >
+                  <img
+                    src={STORE_INFO.storefrontImage}
+                    alt="花花招財貓-台中豐原客製化1.5cm松木貓別墅-實體門店圓環西路97號實景"
+                    draggable={false}
+                    className="w-full h-full object-cover"
+                  />
+                  <ImageProtectionLayer
+                    showVisualLogo={true}
+                    badgePosition="bottom-right"
+                    size="md"
+                  />
+                </div>
                 <div className="pt-3 px-1 flex items-center justify-between text-xs text-stone-600">
                   <span className="font-semibold text-stone-900">臺中市豐原區圓環西路97號</span>
                   <span>支持現貨現場挑選 / 一對一客製規劃</span>
@@ -340,12 +352,21 @@ export const TopicGuidePage: React.FC<TopicGuidePageProps> = ({
                 key={item.id}
                 className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs"
               >
-                <div className="aspect-4/3 bg-[#F6F2EC] p-2">
+                <div
+                  {...protectedMediaContainerProps}
+                  className="relative aspect-4/3 bg-[#F6F2EC] p-2 overflow-hidden protected-media"
+                >
                   <img
                     src={item.imageUrl}
                     alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-${item.dimensionsText}（${item.title}）`}
+                    draggable={false}
                     className="w-full h-full object-contain"
                     loading="lazy"
+                  />
+                  <ImageProtectionLayer
+                    showVisualLogo={true}
+                    badgePosition="bottom-right"
+                    size="sm"
                   />
                 </div>
                 <div className="p-4 space-y-1.5 text-xs">

@@ -10,6 +10,7 @@ import { compressImage } from '../utils/imageCompressor';
 import { useStoreOwner } from '../utils/adminAuth';
 import { StoreOwnerAuthModal } from './StoreOwnerAuthModal';
 import { CloudErrorState, CloudSyncStatusBar } from './CloudSyncStatusBar';
+import { ImageProtectionLayer, protectedMediaContainerProps } from './ImageProtectionLayer';
 import {
   fitImagesWithinFirestoreLimit,
   formatFirestoreActionError,
@@ -31,11 +32,17 @@ import {
   ChevronUp,
   RefreshCw,
   AlertCircle,
-  X
+  X,
+  ShieldCheck
 } from 'lucide-react';
 
 interface BrandStorySectionProps {
-  onOpenImageZoom?: (title: string, imageUrl: string, subtitle?: string) => void;
+  onOpenImageZoom?: (
+    title: string,
+    imageUrl: string,
+    subtitle?: string,
+    watermarkedBaked?: boolean
+  ) => void;
 }
 
 const LOCAL_STORAGE_KEY = 'huahua_brand_custom_photos_v1';
@@ -108,6 +115,7 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
   const [previewDataUrl, setPreviewDataUrl] = useState<string>('');
   const [formError, setFormError] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [autoWatermark, setAutoWatermark] = useState(true);
 
   // In-app delete confirmation modal
   const [deletingPhoto, setDeletingPhoto] = useState<HuaHuaPhoto | null>(null);
@@ -135,7 +143,8 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
               typeof data.storyCaption === 'string' && data.storyCaption
                 ? data.storyCaption
                 : '花花在門店的可愛留影',
-            isCustomUpload: true
+            isCustomUpload: true,
+            watermarked: data.watermarked === true
           });
         }
       });
@@ -271,6 +280,7 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
       dateStr: localPhoto.dateStr,
       storyCaption: localPhoto.storyCaption,
       isCustomUpload: true,
+      watermarked: Boolean(localPhoto.watermarked),
       deleted: false,
       updatedAt: nowIso
     };
@@ -321,7 +331,7 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
 
     try {
       setFormError('');
-      const compressed = await compressImage(file, 840, 0.7);
+      const compressed = await compressImage(file, 840, 0.7, { watermark: autoWatermark });
       setPreviewDataUrl(compressed);
     } catch {
       setFormError('圖片壓縮處理失敗，請換一張再試');
@@ -354,7 +364,8 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
       dateStr: newDateStr || '近期拍攝',
       imageUrl: previewDataUrl,
       storyCaption: newCaption.trim() || '花花在門店的可愛留影',
-      isCustomUpload: true
+      isCustomUpload: true,
+      watermarked: autoWatermark
     };
 
     const meta = {
@@ -364,6 +375,7 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
       dateStr: draftItem.dateStr,
       storyCaption: draftItem.storyCaption,
       isCustomUpload: true,
+      watermarked: autoWatermark,
       deleted: false,
       updatedAt: nowIso
     };
@@ -642,13 +654,15 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
 
               {/* Latest Hero Photo of Hua Hua */}
               <div
-                className="relative rounded-xl overflow-hidden aspect-4/3 bg-stone-100 border border-stone-200 cursor-pointer group"
+                {...protectedMediaContainerProps}
+                className="relative rounded-xl overflow-hidden aspect-4/3 bg-stone-100 border border-stone-200 cursor-pointer group protected-media"
                 onClick={() =>
                   onOpenImageZoom &&
                   onOpenImageZoom(
                     '花花（店貓小老闆）實拍',
                     '/assets/aistudio/8fdb297a6c7229bdd19a04f83e4243b_0047682f.jpg',
-                    '2021年6月23日出生，英短藍貓（母貓已絕育）。打個大哈欠，滿滿幸福安全感！'
+                    '2021年6月23日出生，英短藍貓（母貓已絕育）。打個大哈欠，滿滿幸福安全感！',
+                    false
                   )
                 }
                 title="點擊放大查看花花"
@@ -656,10 +670,16 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
                 <img
                   src="/assets/aistudio/8fdb297a6c7229bdd19a04f83e4243b_0047682f.jpg"
                   alt="花花在實木貓別墅打哈欠"
+                  draggable={false}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
-                <div className="absolute bottom-3 left-3 right-3 text-white flex items-center justify-between">
+                <ImageProtectionLayer
+                  showVisualLogo={true}
+                  badgePosition="top-right-below"
+                  size="md"
+                />
+                <div className="absolute bottom-3 left-3 right-3 text-white flex items-center justify-between z-20">
                   <div>
                     <div className="text-xs font-bold">打個大哈欠 滿滿幸福安全感</div>
                     <div className="text-[10px] text-stone-200">2021/6/23生 · 英短藍貓（已絕育）</div>
@@ -762,13 +782,15 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
               >
                 {/* Photo Thumbnail */}
                 <div
-                  className="relative aspect-4/3 bg-stone-100 cursor-pointer overflow-hidden flex items-center justify-center"
+                  {...protectedMediaContainerProps}
+                  className="relative aspect-4/3 bg-stone-100 cursor-pointer overflow-hidden flex items-center justify-center protected-media"
                   onClick={() =>
                     onOpenImageZoom &&
                     onOpenImageZoom(
                       photo.title,
                       photo.imageUrl,
-                      `${photo.ageStage} · ${photo.dateStr} · ${photo.storyCaption}`
+                      `${photo.ageStage} · ${photo.dateStr} · ${photo.storyCaption}`,
+                      Boolean(photo.watermarked)
                     )
                   }
                   title="點擊放大觀看照片"
@@ -776,17 +798,24 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
                   <img
                     src={photo.imageUrl}
                     alt={`花花招財貓-台中豐原客製化1.5cm松木貓別墅-店貓花花（${photo.title}）`}
+                    draggable={false}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                   />
 
+                  <ImageProtectionLayer
+                    showVisualLogo={!photo.watermarked}
+                    badgePosition="bottom-left"
+                    size="sm"
+                  />
+
                   {/* Stage Badge on Top Left */}
-                  <div className="absolute top-2.5 left-2.5 bg-stone-900/80 backdrop-blur-xs text-white text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-2xs">
+                  <div className="absolute top-2.5 left-2.5 bg-stone-900/80 backdrop-blur-xs text-white text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-2xs z-20">
                     {index + 1}. {photo.ageStage}
                   </div>
 
                   {/* Zoom indicator */}
-                  <div className="absolute top-2.5 right-2.5 p-1.5 bg-white/80 backdrop-blur-xs rounded-md text-stone-700 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute top-2.5 right-2.5 p-1.5 bg-white/80 backdrop-blur-xs rounded-md text-stone-700 opacity-0 group-hover:opacity-100 transition-opacity z-20">
                     <Maximize2 className="w-3.5 h-3.5" />
                   </div>
 
@@ -798,7 +827,7 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
                         e.stopPropagation();
                         handleRequestDeletePhoto(photo);
                       }}
-                      className="absolute bottom-2.5 right-2.5 p-1.5 bg-red-600/90 text-white rounded-md hover:bg-red-700 transition-colors shadow-xs z-10 flex items-center gap-1 text-[10px]"
+                      className="absolute bottom-2.5 right-2.5 p-1.5 bg-red-600/90 text-white rounded-md hover:bg-red-700 transition-colors shadow-xs z-20 flex items-center gap-1 text-[10px]"
                       title="刪除此張寫真照片卡片"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -903,6 +932,23 @@ export const BrandStorySection: React.FC<BrandStorySectionProps> = ({ onOpenImag
                   onChange={handleImageFileChange}
                   className="w-full text-xs text-stone-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-900 hover:file:bg-amber-200 cursor-pointer"
                 />
+                <label className="mt-2.5 flex items-start gap-2.5 p-2.5 rounded-xl bg-amber-50/80 border border-amber-200 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoWatermark}
+                    onChange={(e) => setAutoWatermark(e.target.checked)}
+                    className="mt-0.5 rounded border-amber-400 text-amber-900 focus:ring-amber-800"
+                  />
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-amber-950 flex items-center gap-1.5 text-xs">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-800 shrink-0" />
+                      <span>自動加上「花花招財貓 LOGO」防盜浮水印（建議開啟）</span>
+                    </div>
+                    <p className="text-[11px] text-amber-900/80 leading-relaxed">
+                      選取照片後自動將官方 LOGO 印章與防裁切斜紋烙印入圖檔像素。
+                    </p>
+                  </div>
+                </label>
               </div>
 
               {/* Preview Box */}

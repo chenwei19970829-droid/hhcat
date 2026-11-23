@@ -17,7 +17,11 @@ export function isSizeLimitError(err: unknown): boolean {
 export function formatFirestoreActionError(err: unknown, actionLabel: string): string {
   const msg = err instanceof Error ? err.message : String(err || '');
   if (isQuotaError(err)) {
-    return '今日 Firebase 免費讀寫額度已達上限（Quota exceeded），目前無法同步寫入雲端，所以手機端暫時看不到本次變更。請等待明日額度重置或前往 Firebase Console 確認方案，目前您編輯的內容未遺失。';
+    const isReadAction = /^(讀取|手動重整)/.test(actionLabel.trim());
+    if (isReadAction) {
+      return '今日 Firebase 免費「讀取」額度已達上限（Quota exceeded：訪客瀏覽、爬蟲或重新整理網頁都會消耗每日讀取額度，並非您今天上傳失敗）。目前先顯示本機已快取的照片，請等待每日額度重置（台灣時間約下午 3～4 點）或至 Firebase Console 確認方案。';
+    }
+    return '今日 Firebase 免費讀寫額度已達上限（Quota exceeded），目前無法同步寫入雲端，所以手機端暫時看不到本次變更。請等待每日額度重置（台灣時間約下午 3～4 點）或前往 Firebase Console 確認方案，目前您編輯的內容未遺失。';
   }
   if (isSizeLimitError(err)) {
     return '單筆照片與資料總容量超過雲端 Firestore 1MB 上限（手機將無法同步），請減少幾張照片後重新儲存。';
